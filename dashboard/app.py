@@ -465,6 +465,27 @@ def api_config_post():
         cfg.write(f)
     return jsonify({"ok": True})
 
+ACTIVITY_LOG = "/var/log/snort/dashboard-activity.log"
+MAX_LOG_LINES = 200
+
+@app.route("/api/activitylog", methods=["GET"])
+def api_activitylog_get():
+    try:
+        with open(ACTIVITY_LOG) as f:
+            lines = f.readlines()[-MAX_LOG_LINES:]
+        return jsonify([l.rstrip() for l in lines])
+    except OSError:
+        return jsonify([])
+
+@app.route("/api/activitylog", methods=["POST"])
+def api_activitylog_post():
+    entry = request.get_json().get("line", "").strip()
+    if entry:
+        with open(ACTIVITY_LOG, "a") as f:
+            f.write(entry + "\n")
+    return jsonify({"ok": True})
+
+
 @app.route("/api/restart/snort", methods=["POST"])
 def api_restart_snort():
     result = subprocess.run(

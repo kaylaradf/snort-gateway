@@ -9,29 +9,69 @@ const COLORS = {
   dim:     'var(--text-faint)',
 };
 
-function termLog(msg, type = 'info') {
+function termLog(msg, type = 'info', persist = true) {
   const el = document.getElementById('terminalLog');
   if (!el) return;
   const now = new Date().toLocaleTimeString('id-ID', { hour12: false });
   const line = document.createElement('div');
-  line.style.color = COLORS[type] || COLORS.info;
+  line.style.cssText = `color:${COLORS[type] || COLORS.info};white-space:pre-wrap;word-break:break-all`;
   const prefix = { success: '✓', error: '✗', warn: '⚠', info: '›', dim: ' ' }[type] || '›';
+  const text = `[${now}] ${prefix} ${msg}`;
   line.innerHTML = `<span style="color:var(--text-faint)">[${now}]</span> ${prefix} ${msg}`;
   el.appendChild(line);
   el.scrollTop = el.scrollHeight;
+  if (persist) fetch('/api/activitylog', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ line: text }),
+  });
 }
 
-function termSep() {
+function termSep(persist = true) {
   const el = document.getElementById('terminalLog');
   if (!el) return;
   const line = document.createElement('div');
   line.style.cssText = 'border-top:1px solid var(--border);margin:4px 0;';
   el.appendChild(line);
+  if (persist) fetch('/api/activitylog', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ line: '---' }),
+  });
 }
 
-document.getElementById('btnClearLog').addEventListener('click', () => {
+async function loadActivityLog() {
+  const lines = await fetch('/api/activitylog').then(r => r.json());
+  const el = document.getElementById('terminalLog');
+  if (!el || !lines.length) return;
+  lines.forEach(raw => {
+    if (raw === '---') {
+      const sep = document.createElement('div');
+      sep.style.cssText = 'border-top:1px solid var(--border);margin:4px 0;';
+      el.appendChild(sep);
+    } else {
+      // detect type from prefix char
+      const type = raw.includes('] ✓') ? 'success'
+                 : raw.includes('] ✗') ? 'error'
+                 : raw.includes('] ⚠') ? 'warn'
+                 : raw.includes(']  ') ? 'dim' : 'info';
+      const div = document.createElement('div');
+      div.style.cssText = `color:${COLORS[type]};white-space:pre-wrap;word-break:break-all`;
+      div.textContent = raw;
+      el.appendChild(div);
+    }
+  });
+  el.scrollTop = el.scrollHeight;
+}
+
+document.getElementById('btnClearLog').addEventListener('click', async () => {
   document.getElementById('terminalLog').innerHTML = '';
-  termLog('Log cleared.', 'dim');
+  await fetch('/api/activitylog', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ line: '--- log cleared ---' }),
+  });
+  termLog('Log cleared.', 'dim', false);
 });
 
 /* ── STATUS ─────────────────────────────────────────────── */
@@ -147,9 +187,7 @@ document.getElementById('btnRestartParser').addEventListener('click',
   () => restartService('/api/restart/parser', 'ids-parser'));
 
 /* ── INIT ───────────────────────────────────────────────── */
-termLog('PERKUTUT Settings siap.', 'dim');
-termLog('Perubahan config.ini memerlukan restart service.', 'dim');
-
+loadActivityLog();
 loadStatus();
 loadConfig();
 setInterval(loadStatus, 10000);
