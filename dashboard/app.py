@@ -5,7 +5,7 @@ Read-only. Serves data from SQLite ids_alerts.db.
 """
 
 import sqlite3
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from flask import Flask, jsonify, render_template, g
 
 app = Flask(__name__)
@@ -14,10 +14,10 @@ DB_PATH      = "/var/log/snort/ids_alerts.db"
 RULES_PATH   = "/etc/snort/rules/local.rules"
 PARSER_LOG   = "/var/log/snort/parser.log"
 SNORT_ALERT  = "/var/log/snort/snort.alert.fast"
-WIB          = timezone(timedelta(hours=7))
 
 def now_wib():
-    return datetime.now(WIB)
+    """DB stores timestamps in WIB (system local time). Use local time for queries."""
+    return datetime.now()
 
 # ─── DB ──────────────────────────────────────────────────────────────────────
 
