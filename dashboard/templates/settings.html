@@ -3,7 +3,7 @@
 {% block page_title %}Settings{% endblock %}
 
 {% block content %}
-<div style="display:grid;grid-template-columns:1fr 1fr;grid-template-rows:auto 1fr;gap:var(--space-4);align-items:start">
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-4);align-items:start">
 
   <!-- STATUS -->
   <div class="panel" style="grid-column:1;grid-row:1">
@@ -41,8 +41,8 @@
   </div>
 
   <!-- TERMINAL LOG -->
-  <div class="panel" style="grid-column:1;grid-row:2;display:flex;flex-direction:column;min-height:0;overflow:hidden">
-    <div class="panel-header" style="flex-shrink:0">
+  <div class="panel" style="grid-column:1;grid-row:2">
+    <div class="panel-header">
       <div class="panel-title">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
         Activity Log
@@ -50,7 +50,6 @@
       <button class="pill-btn" id="btnClearLog" style="font-size:0.58rem">Clear</button>
     </div>
     <div id="terminalLog" style="
-      flex:1;
       font-family:var(--font-mono);
       font-size:0.68rem;
       line-height:1.7;
@@ -59,8 +58,7 @@
       overflow-x:hidden;
       background:var(--bg);
       color:var(--text-muted);
-      min-height:160px;
-      max-height:320px;
+      height:240px;
       word-break:break-all;
     "></div>
   </div>
