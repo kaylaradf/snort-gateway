@@ -80,7 +80,9 @@ async function loadOverview() {
 
   const t = d.last_alert_time;
   document.getElementById('kpiLastTime').textContent = t !== '—' ? t.slice(11, 19) : '—';
-  document.getElementById('kpiLastMsg').textContent  = d.last_alert_msg;
+  const msgEl = document.getElementById('kpiLastMsg');
+  msgEl.textContent  = d.last_alert_msg;
+  msgEl.title        = d.last_alert_msg;
 }
 
 async function loadTimeline() {

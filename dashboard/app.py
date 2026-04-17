@@ -5,7 +5,7 @@ Read-only. Serves data from SQLite ids_alerts.db.
 """
 
 import sqlite3
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from flask import Flask, jsonify, render_template, g
 
 app = Flask(__name__)
@@ -14,6 +14,10 @@ DB_PATH      = "/var/log/snort/ids_alerts.db"
 RULES_PATH   = "/etc/snort/rules/local.rules"
 PARSER_LOG   = "/var/log/snort/parser.log"
 SNORT_ALERT  = "/var/log/snort/snort.alert.fast"
+WIB          = timezone(timedelta(hours=7))
+
+def now_wib():
+    return datetime.now(WIB)
 
 # ─── DB ──────────────────────────────────────────────────────────────────────
 
@@ -56,8 +60,8 @@ def settings():
 @app.route("/api/overview")
 def api_overview():
     db = get_db()
-    today = datetime.now().strftime("%Y-%m-%d")
-    yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+    today = now_wib().strftime("%Y-%m-%d")
+    yesterday = (now_wib() - timedelta(days=1)).strftime("%Y-%m-%d")
 
     total_today = db.execute(
         "SELECT COUNT(*) FROM alerts WHERE created_at >= ?", (today,)
@@ -109,7 +113,7 @@ def api_overview():
 def api_timeline():
     """Alert count per 5-minute bucket for the last hour, split by priority."""
     db = get_db()
-    since = (datetime.now() - timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S")
+    since = (now_wib() - timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S")
     rows = db.execute(
         """SELECT strftime('%H:%M', created_at) as t,
                   SUM(CASE WHEN priority=1 THEN 1 ELSE 0 END) as p1,
@@ -126,7 +130,7 @@ def api_timeline():
 @app.route("/api/overview/by_category")
 def api_by_category():
     db = get_db()
-    today = datetime.now().strftime("%Y-%m-%d")
+    today = now_wib().strftime("%Y-%m-%d")
     rows = db.execute(
         """SELECT COALESCE(category,'Unknown') as category, COUNT(*) as count
            FROM alerts WHERE created_at >= ?
@@ -139,7 +143,7 @@ def api_by_category():
 @app.route("/api/overview/top_ips")
 def api_top_ips():
     db = get_db()
-    today = datetime.now().strftime("%Y-%m-%d")
+    today = now_wib().strftime("%Y-%m-%d")
     rows = db.execute(
         """SELECT src_ip, COUNT(*) as count FROM alerts
            WHERE created_at >= ?
@@ -152,7 +156,7 @@ def api_top_ips():
 @app.route("/api/overview/top_rules")
 def api_top_rules():
     db = get_db()
-    today = datetime.now().strftime("%Y-%m-%d")
+    today = now_wib().strftime("%Y-%m-%d")
     rows = db.execute(
         """SELECT sid, msg, COUNT(*) as count FROM alerts
            WHERE created_at >= ?
@@ -240,19 +244,19 @@ def api_analytics_timeline():
     rang  = request.args.get("range", "24h")
 
     if rang == "1h":
-        since  = datetime.now() - timedelta(hours=1)
+        since  = now_wib() - timedelta(hours=1)
         bucket = "%Y-%m-%d %H:%M"
     elif rang == "6h":
-        since  = datetime.now() - timedelta(hours=6)
+        since  = now_wib() - timedelta(hours=6)
         bucket = "%Y-%m-%d %H:%M"
     elif rang == "7d":
-        since  = datetime.now() - timedelta(days=7)
+        since  = now_wib() - timedelta(days=7)
         bucket = "%Y-%m-%d"
     elif rang == "30d":
-        since  = datetime.now() - timedelta(days=30)
+        since  = now_wib() - timedelta(days=30)
         bucket = "%Y-%m-%d"
     else:  # 24h default
-        since  = datetime.now() - timedelta(hours=24)
+        since  = now_wib() - timedelta(hours=24)
         bucket = "%Y-%m-%d %H:00"
 
     rows = db.execute(
@@ -315,7 +319,7 @@ def api_analytics_protocol():
 def _since(rang):
     m = {"1h": 1, "6h": 6, "24h": 24, "7d": 168, "30d": 720}
     h = m.get(rang, 24)
-    return (datetime.now() - timedelta(hours=h)).strftime("%Y-%m-%d %H:%M:%S")
+    return (now_wib() - timedelta(hours=h)).strftime("%Y-%m-%d %H:%M:%S")
 
 # ─── API: RULES ───────────────────────────────────────────────────────────────
 
@@ -361,7 +365,7 @@ def api_status():
 
     db = get_db()
     total_records = db.execute("SELECT COUNT(*) FROM alerts").fetchone()[0]
-    today = datetime.now().strftime("%Y-%m-%d")
+    today = now_wib().strftime("%Y-%m-%d")
     p1_today = db.execute(
         "SELECT COUNT(*) FROM alerts WHERE priority=1 AND created_at >= ?", (today,)
     ).fetchone()[0]
