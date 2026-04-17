@@ -24,6 +24,9 @@ function applyPalette(id) {
   });
   const p = PALETTES.find(x => x.id === id);
   if (palNameEl) palNameEl.textContent = p ? p.name : 'Light';
+  // invert logo on light palette
+  const logo = document.getElementById('sidebarLogo');
+  if (logo) logo.style.filter = id === 'light' ? 'invert(1)' : '';
   if (typeof onPaletteChange === 'function') onPaletteChange();
 }
 
@@ -40,6 +43,11 @@ const PALETTES = [
 
 const _saved = localStorage.getItem('ids-palette') || 'default';
 document.documentElement.setAttribute('data-palette', _saved);
+// apply logo invert on init if light
+document.addEventListener('DOMContentLoaded', () => {
+  const logo = document.getElementById('sidebarLogo');
+  if (logo && _saved === 'light') logo.style.filter = 'invert(1)';
+});
 
 const grid = document.getElementById('paletteGrid');
 const palNameEl = document.getElementById('paletteName');

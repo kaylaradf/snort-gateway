@@ -5,8 +5,11 @@ Read-only. Serves data from SQLite ids_alerts.db.
 """
 
 import sqlite3
+import configparser
+import subprocess
+import os
 from datetime import datetime, timedelta
-from flask import Flask, jsonify, render_template, g
+from flask import Flask, jsonify, render_template, request, g
 
 app = Flask(__name__)
 
@@ -14,6 +17,7 @@ DB_PATH      = "/var/log/snort/ids_alerts.db"
 RULES_PATH   = "/etc/snort/rules/local.rules"
 PARSER_LOG   = "/var/log/snort/parser.log"
 SNORT_ALERT  = "/var/log/snort/snort.alert.fast"
+CONFIG_PATH  = "/opt/ids-dashboard/config.ini"
 
 def now_wib():
     """DB stores timestamps in WIB (system local time). Use local time for queries."""
@@ -54,6 +58,10 @@ def rules():
 @app.route("/settings")
 def settings():
     return render_template("settings.html", active="settings")
+
+@app.route("/about")
+def about():
+    return render_template("about.html", active="about")
 
 # ─── API: OVERVIEW ───────────────────────────────────────────────────────────
 
@@ -389,6 +397,54 @@ def api_status():
         "rules_path":     RULES_PATH,
         "p1_today":       p1_today,
     })
+
+
+# ─── API: CONFIG ─────────────────────────────────────────────────────────────
+
+SENSITIVE = {"bot_token", "chat_id"}
+
+@app.route("/api/config", methods=["GET"])
+def api_config_get():
+    cfg = configparser.ConfigParser()
+    cfg.read(CONFIG_PATH)
+    result = {}
+    for section in cfg.sections():
+        result[section] = {}
+        for key, val in cfg.items(section):
+            result[section][key] = "••••••••" if key in SENSITIVE else val
+    return jsonify(result)
+
+@app.route("/api/config", methods=["POST"])
+def api_config_post():
+    data = request.get_json()
+    cfg = configparser.ConfigParser()
+    cfg.read(CONFIG_PATH)
+    for section, keys in data.items():
+        if not cfg.has_section(section):
+            cfg.add_section(section)
+        for key, val in keys.items():
+            if key in SENSITIVE and val.startswith("••"):
+                continue  # skip masked values — don't overwrite
+            cfg.set(section, key, str(val))
+    with open(CONFIG_PATH, "w") as f:
+        cfg.write(f)
+    return jsonify({"ok": True})
+
+@app.route("/api/restart/snort", methods=["POST"])
+def api_restart_snort():
+    result = subprocess.run(
+        ["sudo", "systemctl", "restart", "snort"],
+        capture_output=True, text=True
+    )
+    return jsonify({"ok": result.returncode == 0, "msg": result.stderr.strip() or "OK"})
+
+@app.route("/api/restart/parser", methods=["POST"])
+def api_restart_parser():
+    result = subprocess.run(
+        ["sudo", "systemctl", "restart", "ids-parser"],
+        capture_output=True, text=True
+    )
+    return jsonify({"ok": result.returncode == 0, "msg": result.stderr.strip() or "OK"})
 
 
 if __name__ == "__main__":
