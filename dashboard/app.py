@@ -497,7 +497,7 @@ def api_restart_snort():
 @app.route("/api/restart/parser", methods=["POST"])
 def api_restart_parser():
     result = subprocess.run(
-        ["sudo", "systemctl", "restart", "ids-parser"],
+        ["sudo", "systemctl", "restart", "snort-gateway"],
         capture_output=True, text=True
     )
     return jsonify({"ok": result.returncode == 0, "msg": result.stderr.strip() or "OK"})

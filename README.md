@@ -1,6 +1,8 @@
-# IDS Parser — Dokumentasi & Setup Guide
+# PERKUTUT — Snort Gateway
 
-Parser realtime untuk Snort IDS. Membaca alert log, menyimpan ke SQLite, dan mengirim notifikasi ke Telegram.
+**Pemantau Event & Rekon Keamanan Untuk Tindak Ulang Terstruktur**
+
+Sistem monitoring IDS berbasis Snort 2.9.x dengan pipeline lengkap: parsing alert realtime, penyimpanan ke SQLite, notifikasi Telegram, dan dashboard web interaktif.
 
 ---
 
@@ -8,52 +10,91 @@ Parser realtime untuk Snort IDS. Membaca alert log, menyimpan ke SQLite, dan men
 
 | Komponen | Detail |
 |---|---|
-| OS | Ubuntu 24.04 |
+| OS | Ubuntu 22.04 / 24.04 |
 | IDS | Snort 2.9.20 |
-| Python | 3.12.3 |
+| Python | 3.12.x |
 | Database | SQLite3 (stdlib) |
 | Notifikasi | Telegram Bot API |
-| Dependency | `requests>=2.31.0` |
-| Service | systemd |
+| Dashboard | Flask 3.x + Chart.js 4.x |
+| Service | systemd (`snort-gateway`) |
+| Dependencies | `requests>=2.31.0`, `flask>=3.0.0` |
 
 ---
 
 ## Arsitektur Pipeline
 
 ```
-Snort 2.9.x
+Snort 2.9.x (ens37)
     │
     │  output alert_fast → snort.alert.fast
     ▼
 /var/log/snort/snort.alert.fast
     │
-    │  tail realtime (position tracking)
+    │  tail realtime (position tracking, restart-safe)
     ▼
 parser.py
     ├── parse regex → dict
-    ├── filter (DHCP noise, priority 0)
+    ├── filter (DHCP noise SID 527, priority 0)
     ├── save → SQLite (alerts)
     ├── dedup check → notif_log (sid + src_ip, window N detik)
     └── send → Telegram Bot API
+    
+/var/log/snort/ids_alerts.db
+    │
+    │  read-only queries
+    ▼
+dashboard/app.py (Flask, port 5000)
+    └── browser → http://<server>:5000
 ```
 
 ---
 
-## Struktur File
+## Struktur Direktori
 
 ```
-/opt/ids-dashboard/
-├── parser.py            # Parser utama
-├── config.ini           # Konfigurasi (JANGAN di-commit, ada credentials)
-├── requirements.txt     # Python dependencies
-├── ids-parser.service   # systemd unit file
-└── SETUP.md             # Quick setup
+/root/ids-gateway/              ← repo utama
+├── parser.py                   # Parser Snort alert
+├── config.ini                  # Konfigurasi (JANGAN di-commit)
+├── requirements.txt            # Python dependencies
+├── snort-gateway.service       # systemd unit file
+├── local.rules                 # Snort rules yang di-cover
+├── install.sh                  # Installer otomatis
+├── uninstall.sh                # Uninstaller
+├── README.md
+├── INSTALL.md
+├── UNINSTALL.md
+└── dashboard/
+    ├── app.py                  # Flask backend (semua API endpoint)
+    ├── templates/
+    │   ├── base.html           # Layout utama (sidebar, topbar)
+    │   ├── overview.html       # Halaman Overview
+    │   ├── eventlog.html       # Halaman Event Log
+    │   ├── analytics.html      # Halaman Analytics
+    │   ├── rules.html          # Halaman Rules
+    │   ├── settings.html       # Halaman Settings + config editor
+    │   └── about.html          # Halaman About (team)
+    ├── static/
+    │   ├── css/style.css       # Semua styles + 7 color palettes
+    │   ├── js/base.js          # Shared: clock, palette switcher, status poll
+    │   ├── js/overview.js      # Overview: KPI, charts, recent events
+    │   ├── js/eventlog.js      # Event Log: search, filter, pagination
+    │   ├── js/analytics.js     # Analytics: timeline, donut, top IPs
+    │   ├── js/rules.js         # Rules: tabel local.rules
+    │   ├── js/settings.js      # Settings: config editor, restart, terminal log
+    │   └── logorks.png         # Logo PERKUTUT
+    └── assets/
+        └── logorks.png
+
+/opt/ids-dashboard/             ← direktori instalasi runtime
+├── parser.py
+└── config.ini
 
 /var/log/snort/
-├── snort.alert.fast     # Alert log Snort (input parser)
-├── ids_alerts.db        # SQLite database
-├── parser.pos           # Posisi baca terakhir (restart-safe)
-└── parser.log           # Log parser
+├── snort.alert.fast            # Alert log Snort (input parser)
+├── ids_alerts.db               # SQLite database
+├── parser.pos                  # Posisi baca terakhir
+├── parser.log                  # Log parser
+└── dashboard-activity.log      # Log aktivitas dashboard (settings)
 ```
 
 ---
@@ -72,15 +113,17 @@ pos_file  = /var/log/snort/parser.pos
 log_file  = /var/log/snort/parser.log
 
 [settings]
-dedup_window_seconds  = 2       # sid+src_ip sama dalam N detik → skip
-min_priority_notify   = 2       # priority > nilai ini → simpan DB saja, tidak notif
-poll_interval_seconds = 1
+dedup_window_seconds   = 5      # sid+src_ip sama dalam N detik → skip notif
+min_priority_notify    = 2      # priority > nilai ini → simpan DB saja, tidak notif
+poll_interval_seconds  = 1      # interval polling alert log
 max_notif_per_category = 1
 ```
 
+> Config juga bisa diedit langsung dari dashboard di halaman **Settings**.
+
 ### Cara dapat Bot Token & Chat ID Telegram
 1. Buka [@BotFather](https://t.me/BotFather) → `/newbot` → copy token
-2. Kirim pesan ke bot kamu, lalu buka `https://api.telegram.org/bot<TOKEN>/getUpdates` → ambil `chat.id`
+2. Kirim pesan ke bot, buka `https://api.telegram.org/bot<TOKEN>/getUpdates` → ambil `chat.id`
 
 ---
 
@@ -102,8 +145,8 @@ max_notif_per_category = 1
 | msg | TEXT | Alert message |
 | priority | INTEGER | 1=Critical, 2=Warning, 3=Info |
 | classtype | TEXT | Snort classtype |
-| category | TEXT | Custom category (mapping manual) |
-| created_at | TEXT | Waktu insert ke DB |
+| category | TEXT | Custom category (SID mapping) |
+| created_at | TEXT | Waktu insert ke DB (UTC) |
 
 ### Tabel `notif_log`
 | Kolom | Tipe | Keterangan |
@@ -126,56 +169,98 @@ max_notif_per_category = 1
 | 1418 | SNMP request tcp | Reconnaissance |
 | 1421 | SNMP AgentX/tcp request | Reconnaissance |
 | 1000099 | ICMP PING Detected | ICMP |
-| 1000001 | HTTP GET WP Container | Web Traffic |
-| 1000002 | HTTP POST WP Container | Web Traffic |
-| 1000003 | HTTP PUT WP Container | Web Traffic |
-| 1000004 | HTTP DELETE WP Container | Web Traffic |
-| 2000001 | Possible Nmap SYN Scan | Reconnaissance |
-| 2000002 | Possible Nmap FIN Scan | Reconnaissance |
-| 2000003 | Possible Nmap NULL Scan | Reconnaissance |
-| 2000004 | Possible Nmap XMAS Scan | Reconnaissance |
-| 2000005 | Possible Nmap UDP Scan | Reconnaissance |
-| 2100001 | Nmap HTTP Probe HEAD (-sV) | Reconnaissance |
-| 2100002 | NMAP HTTP Probe No User Agent (-sV) | Reconnaissance |
-| 2100003 | ET SCAN Nmap Aggressive Scan Detected | Reconnaissance |
+| 1000001–1000004 | HTTP GET/POST/PUT/DELETE WP Container | Web Traffic |
+| 2000001–2000005 | Possible Nmap SYN/FIN/NULL/XMAS/UDP Scan | Reconnaissance |
+| 2100001–2100003 | Nmap HTTP Probe / Aggressive Scan | Reconnaissance |
 
 ---
 
 ## Logika Notifikasi
 
-- **Priority 1** → 🔴 CRITICAL — selalu notif
-- **Priority 2** → 🟠 WARNING — selalu notif
-- **Priority 3+** → simpan ke DB saja, tidak notif
-- **Priority 0** → skip (rule tanpa priority di Snort default ke 0)
-- **Dedup** → `sid + src_ip` sama dalam `dedup_window_seconds` → skip notif, tetap masuk DB
-- **Filter DHCP** → SID 527 dari `0.0.0.0` atau `::` → skip sepenuhnya
+| Kondisi | Aksi |
+|---|---|
+| Priority 1 | 🔴 CRITICAL — selalu notif Telegram |
+| Priority 2 | 🟠 WARNING — selalu notif Telegram |
+| Priority 3+ | Simpan DB saja, tidak notif |
+| Priority 0 | Skip sepenuhnya |
+| SID 527 dari `0.0.0.0` / `::` | Skip (DHCP noise) |
+| `sid + src_ip` sama dalam `dedup_window_seconds` | Skip notif, tetap masuk DB |
+
+---
+
+## Dashboard
+
+Akses di `http://<server-ip>:5000`
+
+| Halaman | Fungsi |
+|---|---|
+| Overview | KPI cards, timeline chart, donut by category, top IPs, top rules, recent events |
+| Event Log | Tabel semua alert, search (ip/port/sid/msg/category), filter priority, pagination |
+| Analytics | Timeline multi-range (1H/6H/24H/7D/30D), top IPs bar chart, by protocol |
+| Rules | Tabel semua rule dari `local.rules` |
+| Settings | Status service, config.ini editor, restart Snort/Parser, terminal activity log |
+| About | Info tim pengembang |
+
+### Color Palettes
+Midnight (default) · Dracula · Monokai · Solarized · One Dark · Tokyo Night · Gruvbox · Light
 
 ---
 
 ## Snort Requirements
 
-### `snort.conf` — output yang harus aktif
+### `snort.conf`
 ```
 output alert_fast: snort.alert.fast
 ```
 
-### Interface
-Snort harus jalan di **satu interface saja** per instance yang menulis ke satu `snort.alert.fast`. Dua instance menulis ke file yang sama menyebabkan race condition.
-
-```
+### Interface — satu saja
+```bash
 # /etc/default/snort
-DEBIAN_SNORT_INTERFACE="ens37"   # interface yang menghadap attacker/target
+DEBIAN_SNORT_INTERFACE="ens37"
 ```
-
-### `local.rules` — rules yang di-cover parser ini
-Lihat file `local.rules` di direktori ini untuk rules lengkap yang sudah diuji.
+> Dua instance Snort menulis ke file yang sama → race condition → alert hilang.
 
 ---
 
-## Setup Manual
-
-Lihat [INSTALL.md](./INSTALL.md) untuk langkah instalasi lengkap, atau jalankan script otomatis:
+## Instalasi
 
 ```bash
 sudo bash install.sh
 ```
+
+Lihat [INSTALL.md](./INSTALL.md) untuk panduan lengkap.
+
+## Uninstall
+
+```bash
+sudo bash uninstall.sh
+```
+
+Lihat [UNINSTALL.md](./UNINSTALL.md) untuk detail apa yang dihapus.
+
+---
+
+## Service Management
+
+```bash
+# Status
+sudo systemctl status snort-gateway
+
+# Start / Stop / Restart
+sudo systemctl start snort-gateway
+sudo systemctl stop snort-gateway
+sudo systemctl restart snort-gateway
+
+# Log realtime
+journalctl -u snort-gateway -f
+tail -f /var/log/snort/parser.log
+```
+
+---
+
+## Catatan Keamanan
+
+- `config.ini` mengandung Telegram credentials — **jangan di-commit ke git** (sudah ada di `.gitignore`)
+- Dashboard berjalan di port 5000, tidak ada autentikasi — **batasi akses dengan firewall** ke IP tertentu saja
+- Dashboard hanya read-only ke database, kecuali fitur edit config dan restart service
+- Restart service dari dashboard membutuhkan `sudo` tanpa password untuk `systemctl` — konfigurasi di `/etc/sudoers.d/snort-gateway`

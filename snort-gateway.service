@@ -1,0 +1,14 @@
+[Unit]
+Description=Snort Gateway — IDS Parser (Snort → SQLite → Telegram)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /opt/ids-dashboard/parser.py
+Restart=on-failure
+RestartSec=5
+StandardOutput=null
+StandardError=null
+
+[Install]
+WantedBy=multi-user.target

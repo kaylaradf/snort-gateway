@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# uninstall.sh — IDS Parser uninstaller
+# uninstall.sh — Snort Gateway uninstaller
 # Jalankan dengan: sudo bash uninstall.sh
 
 set -e
@@ -13,29 +13,36 @@ error() { echo -e "${RED}[✗]${NC} $1"; exit 1; }
 
 # ── Konfirmasi ────────────────────────────────────────────────────────────────
 echo -e "${RED}[!] Ini akan menghapus:${NC}"
-echo "    - systemd service ids-parser"
-echo "    - /opt/ids-dashboard/ (parser.py, config.ini, dll)"
-echo "    - /var/log/snort/ids_alerts.db"
+echo "    - systemd service snort-gateway + snort-gateway-dashboard"
+echo "    - /opt/ids-dashboard/ (parser.py, config.ini, dashboard/)"
 echo "    - /var/log/snort/parser.log"
 echo "    - /var/log/snort/parser.pos"
+echo "    - /var/log/snort/dashboard-activity.log"
+echo "    - /etc/sudoers.d/snort-gateway"
 echo ""
 read -rp "Lanjutkan? (y/N): " confirm
 [[ "$confirm" =~ ^[Yy]$ ]] || { echo "Dibatalkan."; exit 0; }
 
-# ── Stop & disable service ────────────────────────────────────────────────────
-if systemctl is-active --quiet ids-parser 2>/dev/null; then
-    info "Menghentikan ids-parser service"
-    systemctl stop ids-parser
-fi
-if systemctl is-enabled --quiet ids-parser 2>/dev/null; then
-    info "Menonaktifkan ids-parser service"
-    systemctl disable ids-parser
-fi
-if [[ -f /etc/systemd/system/ids-parser.service ]]; then
-    info "Menghapus ids-parser.service"
-    rm -f /etc/systemd/system/ids-parser.service
-    systemctl daemon-reload
-fi
+# Tanya soal database
+echo ""
+read -rp "Hapus database alerts (/var/log/snort/ids_alerts.db)? (y/N): " del_db
+
+# ── Stop & disable services ───────────────────────────────────────────────────
+for svc in snort-gateway snort-gateway-dashboard ids-parser; do
+    if systemctl is-active --quiet "$svc" 2>/dev/null; then
+        info "Menghentikan $svc"
+        systemctl stop "$svc"
+    fi
+    if systemctl is-enabled --quiet "$svc" 2>/dev/null; then
+        info "Menonaktifkan $svc"
+        systemctl disable "$svc"
+    fi
+    if [[ -f "/etc/systemd/system/${svc}.service" ]]; then
+        info "Menghapus ${svc}.service"
+        rm -f "/etc/systemd/system/${svc}.service"
+    fi
+done
+systemctl daemon-reload
 
 # ── Hapus direktori instalasi ─────────────────────────────────────────────────
 if [[ -d /opt/ids-dashboard ]]; then
@@ -43,16 +50,31 @@ if [[ -d /opt/ids-dashboard ]]; then
     rm -rf /opt/ids-dashboard
 fi
 
-# ── Hapus file log & DB ───────────────────────────────────────────────────────
-for f in /var/log/snort/ids_alerts.db /var/log/snort/parser.log /var/log/snort/parser.pos; do
-    if [[ -f "$f" ]]; then
-        info "Menghapus $f"
-        rm -f "$f"
-    fi
+# ── Hapus file log ────────────────────────────────────────────────────────────
+for f in /var/log/snort/parser.log \
+          /var/log/snort/parser.pos \
+          /var/log/snort/dashboard-activity.log; do
+    [[ -f "$f" ]] && { info "Menghapus $f"; rm -f "$f"; }
 done
+
+# ── Hapus DB (opsional) ───────────────────────────────────────────────────────
+if [[ "$del_db" =~ ^[Yy]$ ]]; then
+    [[ -f /var/log/snort/ids_alerts.db ]] && {
+        info "Menghapus /var/log/snort/ids_alerts.db"
+        rm -f /var/log/snort/ids_alerts.db
+    }
+else
+    warn "Database dipertahankan di /var/log/snort/ids_alerts.db"
+fi
+
+# ── Hapus sudoers ─────────────────────────────────────────────────────────────
+[[ -f /etc/sudoers.d/snort-gateway ]] && {
+    info "Menghapus /etc/sudoers.d/snort-gateway"
+    rm -f /etc/sudoers.d/snort-gateway
+}
 
 # ── Selesai ───────────────────────────────────────────────────────────────────
 echo ""
 info "Uninstall selesai."
-warn "snort.conf dan local.rules tidak diubah — Snort tetap berjalan normal."
+warn "snort.conf, local.rules, dan snort.alert.fast tidak diubah — Snort tetap berjalan normal."
 echo ""

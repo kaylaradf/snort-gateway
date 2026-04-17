@@ -1,0 +1,15 @@
+[Unit]
+Description=Snort Gateway — Dashboard (Flask, port 5000)
+After=network.target snort-gateway.service
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/ids-dashboard/dashboard
+ExecStart=/usr/bin/python3 /opt/ids-dashboard/dashboard/app.py
+Restart=on-failure
+RestartSec=5
+StandardOutput=null
+StandardError=null
+
+[Install]
+WantedBy=multi-user.target
