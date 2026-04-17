@@ -20,8 +20,19 @@ SNORT_ALERT  = "/var/log/snort/snort.alert.fast"
 CONFIG_PATH  = "/opt/ids-dashboard/config.ini"
 
 def now_wib():
-    """DB stores timestamps in WIB (system local time). Use local time for queries."""
+    """DB stores UTC. Use UTC for queries."""
     return datetime.now()
+
+def to_wib(ts_str):
+    """Convert UTC timestamp string from DB to WIB (+7) for display."""
+    if not ts_str:
+        return ts_str
+    try:
+        dt = datetime.strptime(ts_str[:19], "%Y-%m-%d %H:%M:%S")
+        dt = dt + timedelta(hours=7)
+        return dt.strftime("%Y-%m-%d %H:%M:%S")
+    except Exception:
+        return ts_str
 
 # ─── DB ──────────────────────────────────────────────────────────────────────
 
@@ -112,7 +123,7 @@ def api_overview():
         "p2_today":      p2_today,
         "attacker_ips":  attacker_ips,
         "top_ip":        top_ip["src_ip"].split(".")[-1] if top_ip else "—",
-        "last_alert_time": last_alert["timestamp"] if last_alert else "—",
+        "last_alert_time": to_wib(last_alert["timestamp"]) if last_alert else "—",
         "last_alert_msg":  last_alert["msg"] if last_alert else "—",
     })
 
@@ -132,7 +143,14 @@ def api_timeline():
            ORDER BY t""",
         (since,)
     ).fetchall()
-    return jsonify([{"t": r["t"], "p1": r["p1"], "p2": r["p2"]} for r in rows])
+    # shift bucket labels +7h for display
+    def shift_t(t):
+        try:
+            dt = datetime.strptime(t, "%H:%M") + timedelta(hours=7)
+            return dt.strftime("%H:%M")
+        except Exception:
+            return t
+    return jsonify([{"t": shift_t(r["t"]), "p1": r["p1"], "p2": r["p2"]} for r in rows])
 
 
 @app.route("/api/overview/by_category")
@@ -182,7 +200,12 @@ def api_recent_events():
                   dst_ip, dst_port, protocol
            FROM alerts ORDER BY id DESC LIMIT 10"""
     ).fetchall()
-    return jsonify([dict(r) for r in rows])
+    result = []
+    for r in rows:
+        d = dict(r)
+        d["timestamp"] = to_wib(d.get("timestamp"))
+        result.append(d)
+    return jsonify(result)
 
 # ─── API: EVENT LOG ───────────────────────────────────────────────────────────
 
@@ -227,11 +250,16 @@ def api_events():
         params + [per, (page - 1) * per]
     ).fetchall()
 
+    data = []
+    for r in rows:
+        d = dict(r)
+        d["timestamp"] = to_wib(d.get("timestamp"))
+        data.append(d)
     return jsonify({
         "total": total,
         "page":  page,
         "pages": (total + per - 1) // per,
-        "data":  [dict(r) for r in rows],
+        "data":  data,
     })
 
 
@@ -276,7 +304,14 @@ def api_analytics_timeline():
             GROUP BY t ORDER BY t""",
         (since.strftime("%Y-%m-%d %H:%M:%S"),)
     ).fetchall()
-    return jsonify([{"t": r["t"], "p1": r["p1"], "p2": r["p2"], "total": r["total"]} for r in rows])
+    def shift_bucket(t, fmt):
+        try:
+            dt = datetime.strptime(t, fmt) + timedelta(hours=7)
+            return dt.strftime(fmt)
+        except Exception:
+            return t
+    fmt = "%Y-%m-%d" if rang in ("7d", "30d") else ("%Y-%m-%d %H:00" if rang == "24h" else "%Y-%m-%d %H:%M")
+    return jsonify([{"t": shift_bucket(r["t"], fmt), "p1": r["p1"], "p2": r["p2"], "total": r["total"]} for r in rows])
 
 
 @app.route("/api/analytics/by_category")
