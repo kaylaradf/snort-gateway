@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block title %}Overview{% endblock %}
+{% block page_title %}Overview{% endblock %}
+
+{% block content %}
+<!-- KPI -->
+<div class="kpi-grid">
+  <div class="kpi-card">
+    <div class="kpi-label">Total Alerts Today</div>
+    <div class="kpi-value" style="color:var(--critical)" id="kpiTotal">—</div>
+    <div class="kpi-sub" id="kpiPct" style="color:var(--text-muted)">—</div>
+    <div class="kpi-bar" style="background:var(--critical)"></div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Critical P1</div>
+    <div class="kpi-value" style="color:var(--critical)" id="kpiP1">—</div>
+    <div class="kpi-sub" style="color:var(--text-muted)">today</div>
+    <div class="kpi-bar" style="background:var(--critical)"></div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Warning P2</div>
+    <div class="kpi-value" style="color:var(--warning)" id="kpiP2">—</div>
+    <div class="kpi-sub" style="color:var(--text-muted)">today</div>
+    <div class="kpi-bar" style="background:var(--warning)"></div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Attacker IPs</div>
+    <div class="kpi-value" style="color:var(--accent)" id="kpiIPs">—</div>
+    <div class="kpi-sub" style="color:var(--text-muted)">Top: <span id="kpiTopIP">—</span></div>
+    <div class="kpi-bar" style="background:var(--accent)"></div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Last Alert</div>
+    <div class="kpi-value" style="font-size:1rem;font-family:var(--font-mono);letter-spacing:0" id="kpiLastTime">—</div>
+    <div class="kpi-sub" style="color:var(--text-muted);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="kpiLastMsg">—</div>
+    <div class="kpi-bar" style="background:var(--text-faint);opacity:0.3"></div>
+  </div>
+</div>
+
+<!-- CHARTS -->
+<div class="charts-row">
+  <div class="panel">
+    <div class="panel-header">
+      <div class="panel-title">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        Alert Volume (last hour)
+      </div>
+    </div>
+    <div class="panel-body">
+      <div class="chart-wrap"><canvas id="timelineChart"></canvas></div>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="panel-header">
+      <div class="panel-title">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
+        By Category
+      </div>
+    </div>
+    <div class="donut-wrap">
+      <div class="donut-chart-area">
+        <canvas id="donutChart" style="max-height:130px;max-width:130px;"></canvas>
+        <div class="donut-center">
+          <div class="donut-center-val" id="donutTotal">—</div>
+          <div class="donut-center-lbl">today</div>
+        </div>
+      </div>
+      <div class="legend-list" id="donutLegend"></div>
+    </div>
+  </div>
+</div>
+
+<!-- BOTTOM ROW -->
+<div class="bottom-row">
+  <div class="panel">
+    <div class="panel-header">
+      <div class="panel-title">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/></svg>
+        Top Attacker IPs
+      </div>
+    </div>
+    <div class="ip-list" id="topIPs"></div>
+  </div>
+  <div class="panel">
+    <div class="panel-header">
+      <div class="panel-title">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        Top Triggered Rules
+      </div>
+    </div>
+    <div class="ip-list" id="topRules"></div>
+  </div>
+</div>
+
+<!-- RECENT EVENTS -->
+<div class="full-panel">
+  <div class="panel-header">
+    <div class="panel-title">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      Recent Events
+    </div>
+    <div class="auto-refresh">
+      <span class="refresh-count" id="countDown">10s</span>
+    </div>
+  </div>
+  <div class="log-table-wrap">
+    <table class="log-table">
+      <thead><tr>
+        <th>Time</th><th>P</th><th>SID</th><th>Message</th>
+        <th>Category</th><th>Src IP</th><th>Dst</th><th>Proto</th>
+      </tr></thead>
+      <tbody id="recentBody"></tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/overview.js"></script>
+{% endblock %}

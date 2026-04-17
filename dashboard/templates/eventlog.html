@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Event Log{% endblock %}
+{% block page_title %}Event Log{% endblock %}
+
+{% block content %}
+<div class="full-panel">
+  <div class="panel-header">
+    <div class="panel-title">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      All Events
+    </div>
+    <div class="auto-refresh">
+      <span class="refresh-count" id="countDown">5s</span>
+    </div>
+  </div>
+
+  <!-- TOOLBAR -->
+  <div class="log-toolbar">
+    <input class="log-filter-input" id="searchInput" placeholder="ip · port · sid · msg · recon · 192.168..." type="text">
+    <button class="pill-btn" id="btnSearch" style="flex-shrink:0;padding:4px var(--space-4)">Search</button>
+    <div class="filter-chips" id="priorityChips">
+      <button class="chip" data-p="1">P1 Critical</button>
+      <button class="chip" data-p="2">P2 Warning</button>
+      <button class="chip" data-p="3">P3 Info</button>
+    </div>
+    <select class="log-filter-input" id="catSelect" style="flex:0;width:auto;min-width:120px">
+      <option value="">All Categories</option>
+    </select>
+  </div>
+
+  <!-- TABLE -->
+  <div class="log-table-wrap" style="max-height:calc(100vh - 260px)">
+    <table class="log-table">
+      <thead><tr>
+        <th>Time</th><th>P</th><th>SID</th><th>Message</th>
+        <th>Category</th><th>Src IP</th><th>Dst</th><th>Proto</th>
+      </tr></thead>
+      <tbody id="eventsBody"></tbody>
+    </table>
+  </div>
+
+  <!-- PAGINATION -->
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:var(--space-3) var(--space-5);border-top:1px solid var(--border);">
+    <span style="font-size:var(--text-xs);color:var(--text-muted);font-family:var(--font-ui)" id="pageInfo">—</span>
+    <div style="display:flex;gap:var(--space-2)">
+      <button class="pill-btn" id="btnPrev" onclick="changePage(-1)">← Prev</button>
+      <button class="pill-btn" id="btnNext" onclick="changePage(1)">Next →</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/eventlog.js"></script>
+{% endblock %}

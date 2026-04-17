@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Settings{% endblock %}
+{% block page_title %}Settings{% endblock %}
+
+{% block content %}
+<div class="panel" style="max-width:600px">
+  <div class="panel-header">
+    <div class="panel-title">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+      System Status
+    </div>
+  </div>
+  <div id="statusBody" style="padding:var(--space-4) var(--space-5);display:flex;flex-direction:column;gap:var(--space-3)">
+    <div class="status-row"><span class="status-dot" id="s-snort"></span> Snort</div>
+    <div class="status-row"><span class="status-dot" id="s-parser"></span> Parser (ids-parser.service)</div>
+    <div style="border-top:1px solid var(--border);padding-top:var(--space-3);display:flex;flex-direction:column;gap:var(--space-2)" id="pathInfo"></div>
+    <div style="font-size:var(--text-xs);color:var(--text-muted);font-family:var(--font-mono);padding-top:var(--space-2);border-top:1px solid var(--border)" id="lastLog"></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/settings.js"></script>
+{% endblock %}

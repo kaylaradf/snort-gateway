@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Rules{% endblock %}
+{% block page_title %}Rules{% endblock %}
+
+{% block content %}
+<div class="full-panel">
+  <div class="panel-header">
+    <div class="panel-title">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+      Active Rules — local.rules
+    </div>
+    <span style="font-size:var(--text-xs);color:var(--text-muted);font-family:var(--font-mono)" id="ruleCount">— rules</span>
+  </div>
+  <div class="log-table-wrap" style="max-height:calc(100vh - 180px)">
+    <table class="log-table">
+      <thead><tr>
+        <th>SID</th><th>Protocol</th><th>Priority</th><th>Message</th><th>Classtype</th>
+      </tr></thead>
+      <tbody id="rulesBody"></tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/rules.js"></script>
+{% endblock %}
