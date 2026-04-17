@@ -182,8 +182,21 @@ rm -rf "$INSTALL_DIR/dashboard"
 cp -r "$SCRIPT_DIR/dashboard" "$INSTALL_DIR/dashboard"
 
 if [[ -f "$SCRIPT_DIR/local.rules" ]]; then
-    info "Menyalin local.rules ke /etc/snort/rules/"
-    cp "$SCRIPT_DIR/local.rules" /etc/snort/rules/local.rules
+    if [[ -f /etc/snort/rules/local.rules ]]; then
+        warn "local.rules sudah ada di /etc/snort/rules/local.rules"
+        read -rp "    Timpa dengan local.rules dari repo? (y/N): " overwrite_rules
+        if [[ "$overwrite_rules" =~ ^[Yy]$ ]]; then
+            cp /etc/snort/rules/local.rules /etc/snort/rules/local.rules.backup
+            info "Backup disimpan di /etc/snort/rules/local.rules.backup"
+            cp "$SCRIPT_DIR/local.rules" /etc/snort/rules/local.rules
+            info "local.rules diperbarui"
+        else
+            info "local.rules dipertahankan (tidak diubah)"
+        fi
+    else
+        cp "$SCRIPT_DIR/local.rules" /etc/snort/rules/local.rules
+        info "local.rules disalin ke /etc/snort/rules/"
+    fi
 fi
 
 # ── Sudoers untuk restart dari dashboard ─────────────────────────────────────

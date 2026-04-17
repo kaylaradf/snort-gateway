@@ -11,7 +11,14 @@ import os
 from datetime import datetime, timedelta
 from flask import Flask, jsonify, render_template, request, g
 
-app = Flask(__name__)
+# Resolve paths relative to this file — works regardless of CWD or how it's launched
+_BASE = os.path.dirname(os.path.abspath(__file__))
+
+app = Flask(
+    __name__,
+    template_folder=os.path.join(_BASE, "templates"),
+    static_folder=os.path.join(_BASE, "static"),
+)
 
 DB_PATH      = "/var/log/snort/ids_alerts.db"
 RULES_PATH   = "/etc/snort/rules/local.rules"
