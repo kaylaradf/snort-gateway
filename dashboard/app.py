@@ -455,7 +455,7 @@ def api_status():
 
 # ─── API: CONFIG ─────────────────────────────────────────────────────────────
 
-SENSITIVE = {"bot_token", "chat_id"}
+SENSITIVE = {"bot_token"}
 WA_GATEWAY_URL = "http://127.0.0.1:3001"
 
 @app.route("/api/toggle", methods=["POST"])

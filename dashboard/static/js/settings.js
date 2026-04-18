@@ -146,17 +146,14 @@ async function loadChannelToggles() {
   const tgStatus = document.getElementById('tgStatus');
 
   if (d.telegram) {
-    const hasToken = d.telegram.bot_token &&
-                     !d.telegram.bot_token.startsWith('GANTI') &&
-                     !d.telegram.bot_token.startsWith('•');
-    const explicitEnabled = d.telegram.enabled;
-    tgEl.checked = explicitEnabled !== undefined
-      ? (explicitEnabled === 'true' || explicitEnabled === '1')
-      : hasToken;
-    tgStatus.textContent = hasToken ? `Chat ID: ${d.telegram.chat_id}` : 'Belum dikonfigurasi';
+    tgEl.checked = d.telegram.enabled === 'true';
+    const configured = d.telegram.bot_token && !d.telegram.bot_token.startsWith('GANTI');
+    tgStatus.textContent = configured
+      ? `Chat ID: ${d.telegram.chat_id}`
+      : 'Belum dikonfigurasi';
   }
   if (d.whatsapp) {
-    waEl.checked = d.whatsapp.enabled === 'true' || d.whatsapp.enabled === '1';
+    waEl.checked = d.whatsapp.enabled === 'true';
   }
 }
 
