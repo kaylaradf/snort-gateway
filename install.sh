@@ -321,8 +321,8 @@ fi
 
 # ── Start services ────────────────────────────────────────────────────────────
 section "Menjalankan Services"
-systemctl start snort-gateway
-systemctl start snort-gateway-dashboard
+systemctl restart snort-gateway
+systemctl restart snort-gateway-dashboard
 info "snort-gateway started"
 info "snort-gateway-dashboard started"
 
