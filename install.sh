@@ -11,12 +11,12 @@ info()    { echo -e "${GREEN}[+]${NC} $1"; }
 warn()    { echo -e "${YELLOW}[!]${NC} $1"; }
 error()   { echo -e "${RED}[✗]${NC} $1"; exit 1; }
 section() { echo -e "\n${CYAN}${BOLD}━━ $1 ━━${NC}"; }
-ask()     { echo -e "${YELLOW}[?]${NC} $1"; }
 
-# ── Cek root ──────────────────────────────────────────────────────────────────
 [[ $EUID -ne 0 ]] && error "Jalankan sebagai root: sudo bash install.sh"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+INSTALL_DIR="/opt/ids-dashboard"
+CONFIG="$INSTALL_DIR/config.ini"
 
 # ── Banner ────────────────────────────────────────────────────────────────────
 echo -e "${CYAN}${BOLD}"
@@ -32,61 +32,52 @@ echo -e "  Snort Gateway Installer\n"
 # ── Cek dependensi ────────────────────────────────────────────────────────────
 section "Mengecek Dependensi"
 
-# Snort
-if command -v snort &>/dev/null; then
-    SNORT_VER=$(snort -V 2>&1 | grep -oP 'Version \S+' | head -1)
-    info "Snort ditemukan: $SNORT_VER"
-else
-    error "Snort tidak ditemukan. Install Snort 2.9.x terlebih dahulu."
-fi
+command -v snort &>/dev/null || error "Snort tidak ditemukan. Install Snort 2.9.x terlebih dahulu."
+info "Snort ditemukan: $(snort -V 2>&1 | grep -oP 'Version \S+' | head -1)"
 
-# Python 3.10+
 PY=$(command -v python3) || error "python3 tidak ditemukan"
 PY_VER=$($PY -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
 $PY -c "import sys; sys.exit(0 if sys.version_info >= (3,10) else 1)" \
     || error "Python 3.10+ dibutuhkan, ditemukan $PY_VER"
 info "Python $PY_VER ditemukan"
 
-# requests
 if ! $PY -c "import requests" 2>/dev/null; then
     warn "requests tidak ditemukan, menginstall..."
-    if command -v pip3 &>/dev/null; then
-        pip3 install -q requests
-    else
-        apt-get install -y python3-requests &>/dev/null || \
-            $PY -m pip install -q requests
-    fi
+    apt-get install -y python3-requests &>/dev/null || $PY -m pip install -q requests
     info "requests terinstall"
 else
     info "requests ditemukan"
 fi
 
-# Flask
 if ! $PY -c "import flask" 2>/dev/null; then
     warn "Flask tidak ditemukan, menginstall..."
-    if apt-get install -y python3-flask &>/dev/null; then
-        info "Flask terinstall via apt"
-    else
-        pip3 install -q flask || $PY -m pip install -q flask
-        info "Flask terinstall via pip"
-    fi
+    apt-get install -y python3-flask &>/dev/null || $PY -m pip install -q flask
+    info "Flask terinstall"
 else
-    FLASK_VER=$($PY -c "import flask; print(flask.__version__)")
-    info "Flask $FLASK_VER ditemukan"
+    info "Flask $($PY -c 'import flask; print(flask.__version__)') ditemukan"
 fi
 
-# systemd
 command -v systemctl &>/dev/null || error "systemd tidak ditemukan"
 info "systemd ditemukan"
 
+if command -v node &>/dev/null; then
+    info "Node.js $(node --version) ditemukan"
+else
+    warn "Node.js tidak ditemukan — WhatsApp gateway tidak tersedia"
+    warn "Install: curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && apt-get install -y nodejs"
+    NO_NODE=1
+fi
+
 # ── Cek file source ───────────────────────────────────────────────────────────
 section "Mengecek File Source"
-for f in parser.py requirements.txt snort-gateway.service snort-gateway-dashboard.service; do
+for f in parser.py requirements.txt snort-gateway.service snort-gateway-dashboard.service wa-gateway.service; do
     [[ -f "$SCRIPT_DIR/$f" ]] || error "File $f tidak ditemukan di $SCRIPT_DIR"
     info "  $f ✓"
 done
-[[ -d "$SCRIPT_DIR/dashboard" ]] || error "Direktori dashboard/ tidak ditemukan"
+[[ -d "$SCRIPT_DIR/dashboard" ]]   || error "Direktori dashboard/ tidak ditemukan"
+[[ -d "$SCRIPT_DIR/wa-gateway" ]]  || error "Direktori wa-gateway/ tidak ditemukan"
 info "  dashboard/ ✓"
+info "  wa-gateway/ ✓"
 
 # ── Cek snort.conf ────────────────────────────────────────────────────────────
 section "Mengecek Konfigurasi Snort"
@@ -95,18 +86,48 @@ SNORT_CONF="/etc/snort/snort.conf"
 
 if ! grep -q "^output alert_fast" "$SNORT_CONF"; then
     warn "output alert_fast tidak ditemukan di snort.conf"
-    echo "    Menambahkan: output alert_fast: snort.alert.fast"
     echo "output alert_fast: snort.alert.fast" >> "$SNORT_CONF"
-    warn "Snort perlu di-restart setelah instalasi"
+    warn "Ditambahkan. Snort perlu di-restart setelah instalasi."
 else
     info "output alert_fast sudah dikonfigurasi"
 fi
 
+# ── Pilih Notification Gateway ────────────────────────────────────────────────
+section "Pilih Notification Gateway"
+echo ""
+echo -e "  Pilih channel notifikasi alert IDS:\n"
+echo -e "  ${BOLD}[1]${NC} Telegram Bot"
+echo -e "      Notifikasi via Telegram. Butuh Bot Token + Chat ID dari @BotFather."
+echo ""
+echo -e "  ${BOLD}[2]${NC} WhatsApp Group"
+echo -e "      Notifikasi via WhatsApp group. Butuh nomor WA + scan QR."
+if [[ -n "$NO_NODE" ]]; then
+    echo -e "      ${RED}(tidak tersedia — Node.js belum terinstall)${NC}"
+fi
+echo ""
+echo -e "  ${BOLD}[3]${NC} Keduanya (Telegram + WhatsApp)"
+if [[ -n "$NO_NODE" ]]; then
+    echo -e "      ${RED}(WhatsApp tidak tersedia — Node.js belum terinstall)${NC}"
+fi
+echo ""
+
+while true; do
+    read -rp "  Pilihan [1/2/3]: " GW_CHOICE
+    case "$GW_CHOICE" in
+        1) GATEWAY="telegram"; break ;;
+        2)
+            [[ -n "$NO_NODE" ]] && { warn "Node.js tidak tersedia, pilih 1 atau 3"; continue; }
+            GATEWAY="whatsapp"; break ;;
+        3)
+            [[ -n "$NO_NODE" ]] && { warn "Node.js tidak tersedia untuk WhatsApp, pilih 1"; continue; }
+            GATEWAY="both"; break ;;
+        *) warn "Masukkan 1, 2, atau 3" ;;
+    esac
+done
+info "Gateway dipilih: $GATEWAY"
+
 # ── Onboarding config.ini ─────────────────────────────────────────────────────
 section "Konfigurasi"
-
-INSTALL_DIR="/opt/ids-dashboard"
-CONFIG="$INSTALL_DIR/config.ini"
 mkdir -p "$INSTALL_DIR"
 mkdir -p "/var/log/snort"
 
@@ -117,18 +138,30 @@ if [[ -f "$CONFIG" ]]; then
 fi
 
 if [[ -z "$SKIP_CONFIG" ]]; then
-    echo ""
-    echo -e "  ${BOLD}Telegram Bot${NC}"
-    echo -e "  ${CYAN}Cara dapat token: @BotFather → /newbot${NC}"
-    echo -e "  ${CYAN}Cara dapat chat_id: kirim pesan ke bot, buka https://api.telegram.org/bot<TOKEN>/getUpdates${NC}"
-    echo ""
-    read -rp "  Bot Token : " BOT_TOKEN
-    read -rp "  Chat ID   : " CHAT_ID
-    [[ -z "$BOT_TOKEN" ]] && error "Bot Token tidak boleh kosong"
-    [[ -z "$CHAT_ID" ]]   && error "Chat ID tidak boleh kosong"
 
+    # Telegram credentials
+    BOT_TOKEN="GANTI_DENGAN_BOT_TOKEN"
+    CHAT_ID="GANTI_DENGAN_CHAT_ID"
+    TG_ENABLED="false"
+
+    if [[ "$GATEWAY" == "telegram" || "$GATEWAY" == "both" ]]; then
+        echo ""
+        echo -e "  ${BOLD}Telegram Bot${NC}"
+        echo -e "  ${CYAN}Cara dapat token : @BotFather → /newbot${NC}"
+        echo -e "  ${CYAN}Cara dapat chat_id: kirim pesan ke bot, buka${NC}"
+        echo -e "  ${CYAN}  https://api.telegram.org/bot<TOKEN>/getUpdates${NC}"
+        echo ""
+        read -rp "  Bot Token : " BOT_TOKEN
+        read -rp "  Chat ID   : " CHAT_ID
+        [[ -z "$BOT_TOKEN" ]] && error "Bot Token tidak boleh kosong"
+        [[ -z "$CHAT_ID" ]]   && error "Chat ID tidak boleh kosong"
+        TG_ENABLED="true"
+        info "Telegram dikonfigurasi"
+    fi
+
+    # Paths
     echo ""
-    echo -e "  ${BOLD}Paths${NC} (tekan Enter untuk pakai default)"
+    echo -e "  ${BOLD}Paths${NC} (Enter untuk pakai default)"
     read -rp "  Alert log  [/var/log/snort/snort.alert.fast]: " ALERT_LOG
     read -rp "  DB path    [/var/log/snort/ids_alerts.db]:    " DB_PATH
     read -rp "  Pos file   [/var/log/snort/parser.pos]:       " POS_FILE
@@ -138,8 +171,9 @@ if [[ -z "$SKIP_CONFIG" ]]; then
     POS_FILE="${POS_FILE:-/var/log/snort/parser.pos}"
     LOG_FILE="${LOG_FILE:-/var/log/snort/parser.log}"
 
+    # Settings
     echo ""
-    echo -e "  ${BOLD}Settings${NC} (tekan Enter untuk pakai default)"
+    echo -e "  ${BOLD}Settings${NC} (Enter untuk pakai default)"
     read -rp "  Dedup window seconds   [5]:  " DEDUP
     read -rp "  Min priority notify    [2]:  " MIN_PRIO
     read -rp "  Poll interval seconds  [1]:  " POLL
@@ -149,11 +183,16 @@ if [[ -z "$SKIP_CONFIG" ]]; then
     POLL="${POLL:-1}"
     MAX_NOTIF="${MAX_NOTIF:-1}"
 
+    # WA enabled flag
+    WA_ENABLED="false"
+    [[ "$GATEWAY" == "whatsapp" || "$GATEWAY" == "both" ]] && WA_ENABLED="true"
+
     info "Menulis config.ini..."
     cat > "$CONFIG" <<EOF
 [telegram]
 bot_token = $BOT_TOKEN
 chat_id   = $CHAT_ID
+enabled   = $TG_ENABLED
 
 [paths]
 alert_log = $ALERT_LOG
@@ -168,7 +207,7 @@ poll_interval_seconds  = $POLL
 max_notif_per_category = $MAX_NOTIF
 
 [whatsapp]
-enabled     = false
+enabled     = $WA_ENABLED
 gateway_url = http://127.0.0.1:3001/send
 EOF
     chmod 600 "$CONFIG"
@@ -185,71 +224,107 @@ info "Menyalin dashboard/"
 rm -rf "$INSTALL_DIR/dashboard"
 cp -r "$SCRIPT_DIR/dashboard" "$INSTALL_DIR/dashboard"
 
-if [[ -d "$SCRIPT_DIR/wa-gateway" ]]; then
+if [[ -z "$NO_NODE" ]]; then
     info "Menyalin wa-gateway/"
     rm -rf "$INSTALL_DIR/wa-gateway"
     cp -r "$SCRIPT_DIR/wa-gateway" "$INSTALL_DIR/wa-gateway"
-    info "Menginstall Node.js dependencies wa-gateway"
-    cd "$INSTALL_DIR/wa-gateway" && npm install --omit=dev --silent 2>/dev/null; cd "$SCRIPT_DIR"
+    info "Menginstall Node.js dependencies wa-gateway..."
+    cd "$INSTALL_DIR/wa-gateway" && npm install --omit=dev --silent 2>/dev/null
+    cd "$SCRIPT_DIR"
 fi
 
 if [[ -f "$SCRIPT_DIR/local.rules" ]]; then
     if [[ -f /etc/snort/rules/local.rules ]]; then
-        warn "local.rules sudah ada di /etc/snort/rules/local.rules"
+        warn "local.rules sudah ada"
         read -rp "    Timpa dengan local.rules dari repo? (y/N): " overwrite_rules
         if [[ "$overwrite_rules" =~ ^[Yy]$ ]]; then
             cp /etc/snort/rules/local.rules /etc/snort/rules/local.rules.backup
-            info "Backup disimpan di /etc/snort/rules/local.rules.backup"
+            info "Backup: /etc/snort/rules/local.rules.backup"
             cp "$SCRIPT_DIR/local.rules" /etc/snort/rules/local.rules
             info "local.rules diperbarui"
         else
-            info "local.rules dipertahankan (tidak diubah)"
+            info "local.rules dipertahankan"
         fi
     else
         cp "$SCRIPT_DIR/local.rules" /etc/snort/rules/local.rules
-        info "local.rules disalin ke /etc/snort/rules/"
+        info "local.rules disalin"
     fi
 fi
 
-# ── Sudoers untuk restart dari dashboard ─────────────────────────────────────
+# ── Sudoers ───────────────────────────────────────────────────────────────────
 section "Mengkonfigurasi Sudoers"
-SUDOERS_FILE="/etc/sudoers.d/snort-gateway"
-DASH_USER=$(stat -c '%U' "$INSTALL_DIR/dashboard/app.py" 2>/dev/null || echo "root")
-cat > "$SUDOERS_FILE" <<EOF
+cat > /etc/sudoers.d/snort-gateway <<EOF
 # Snort Gateway — izinkan restart service dari dashboard
 root ALL=(ALL) NOPASSWD: /bin/systemctl restart snort
 root ALL=(ALL) NOPASSWD: /bin/systemctl restart snort-gateway
 root ALL=(ALL) NOPASSWD: /bin/systemctl restart snort-gateway-dashboard
+root ALL=(ALL) NOPASSWD: /bin/systemctl restart wa-gateway
 EOF
-chmod 440 "$SUDOERS_FILE"
-info "Sudoers dikonfigurasi di $SUDOERS_FILE"
+chmod 440 /etc/sudoers.d/snort-gateway
+info "Sudoers dikonfigurasi"
 
 # ── Install systemd services ──────────────────────────────────────────────────
 section "Menginstall Systemd Services"
 
-# Hapus service lama jika ada
 for old in ids-parser ids-parser.service; do
-    if systemctl is-active --quiet "$old" 2>/dev/null; then
-        info "Menghentikan service lama: $old"
-        systemctl stop "$old" 2>/dev/null || true
-    fi
-    if systemctl is-enabled --quiet "$old" 2>/dev/null; then
-        systemctl disable "$old" 2>/dev/null || true
-    fi
+    systemctl stop "$old" 2>/dev/null || true
+    systemctl disable "$old" 2>/dev/null || true
     rm -f "/etc/systemd/system/${old}.service"
 done
 
 cp "$SCRIPT_DIR/snort-gateway.service"           /etc/systemd/system/snort-gateway.service
 cp "$SCRIPT_DIR/snort-gateway-dashboard.service" /etc/systemd/system/snort-gateway-dashboard.service
-cp "$SCRIPT_DIR/wa-gateway.service"              /etc/systemd/system/wa-gateway.service
+if [[ -z "$NO_NODE" ]]; then
+    cp "$SCRIPT_DIR/wa-gateway.service" /etc/systemd/system/wa-gateway.service
+fi
 systemctl daemon-reload
 
 systemctl enable snort-gateway
 systemctl enable snort-gateway-dashboard
-systemctl enable wa-gateway
 info "snort-gateway.service enabled"
 info "snort-gateway-dashboard.service enabled"
-info "wa-gateway.service enabled (start setelah node setup.js)"
+if [[ -z "$NO_NODE" ]]; then
+    systemctl enable wa-gateway
+    info "wa-gateway.service enabled"
+fi
+
+# ── Setup WhatsApp (jika dipilih) ─────────────────────────────────────────────
+if [[ "$GATEWAY" == "whatsapp" || "$GATEWAY" == "both" ]] && [[ -z "$NO_NODE" ]]; then
+    section "Setup WhatsApp Gateway"
+    echo ""
+    warn "Sekarang akan menjalankan setup WhatsApp."
+    warn "Siapkan nomor WhatsApp yang akan dipakai untuk kirim notifikasi."
+    echo ""
+    read -rp "  Lanjutkan setup WhatsApp sekarang? (Y/n): " do_wa_setup
+    if [[ ! "$do_wa_setup" =~ ^[Nn]$ ]]; then
+        info "Menjalankan wa-gateway/setup.js..."
+        echo ""
+        cd "$INSTALL_DIR/wa-gateway" && node setup.js
+        cd "$SCRIPT_DIR"
+        echo ""
+        if [[ -f "$INSTALL_DIR/wa-gateway/config.json" ]]; then
+            info "WhatsApp setup selesai, memulai wa-gateway service..."
+            systemctl start wa-gateway
+            sleep 2
+            systemctl is-active --quiet wa-gateway \
+                && info "wa-gateway berjalan ✓" \
+                || warn "wa-gateway belum aktif, cek: journalctl -u wa-gateway -f"
+        else
+            warn "config.json belum tersimpan — setup mungkin belum selesai"
+            warn "Jalankan manual: cd $INSTALL_DIR/wa-gateway && node setup.js"
+        fi
+    else
+        warn "Setup WhatsApp dilewati."
+        warn "Jalankan manual nanti: cd $INSTALL_DIR/wa-gateway && node setup.js"
+    fi
+fi
+
+# ── Start services ────────────────────────────────────────────────────────────
+section "Menjalankan Services"
+systemctl start snort-gateway
+systemctl start snort-gateway-dashboard
+info "snort-gateway started"
+info "snort-gateway-dashboard started"
 
 # ── Selesai ───────────────────────────────────────────────────────────────────
 echo ""
@@ -257,23 +332,15 @@ echo -e "${GREEN}${BOLD}━━━━━━━━━━━━━━━━━━�
 echo -e "${GREEN}${BOLD}  Instalasi selesai!${NC}"
 echo -e "${GREEN}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
-echo "  Langkah selanjutnya:"
+echo "  Gateway aktif  : $GATEWAY"
+echo "  Dashboard      : http://$(hostname -I | awk '{print $1}'):5000"
 echo ""
-echo "  1. Test parser manual:"
-echo "     python3 $INSTALL_DIR/parser.py"
+echo "  Service management:"
+echo "    sudo systemctl status snort-gateway"
+echo "    sudo systemctl status snort-gateway-dashboard"
+[[ -z "$NO_NODE" ]] && echo "    sudo systemctl status wa-gateway"
 echo ""
-echo "  2. Start services:"
-echo "     sudo systemctl start snort-gateway"
-echo "     sudo systemctl start snort-gateway-dashboard"
-echo ""
-echo "  3. Cek status:"
-echo "     sudo systemctl status snort-gateway"
-echo "     sudo systemctl status snort-gateway-dashboard"
-echo ""
-echo "  4. Akses dashboard:"
-echo "     http://$(hostname -I | awk '{print $1}'):5000"
-echo ""
-echo "  5. Monitor log:"
-echo "     tail -f /var/log/snort/parser.log"
-echo "     journalctl -u snort-gateway -f"
+echo "  Monitor log:"
+echo "    tail -f /var/log/snort/parser.log"
+echo "    journalctl -u snort-gateway -f"
 echo ""

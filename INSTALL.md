@@ -1,23 +1,24 @@
 # INSTALL — Snort Gateway
 
-Panduan instalasi lengkap dari nol. Untuk instalasi otomatis jalankan saja:
+Panduan instalasi lengkap. Untuk instalasi otomatis:
 
 ```bash
 sudo bash install.sh
 ```
 
-Script akan memandu konfigurasi secara interaktif.
+Script akan memandu seluruh proses secara interaktif — termasuk pilih gateway notifikasi, isi credentials, dan setup WhatsApp jika dipilih.
 
 ---
 
 ## Prerequisites
 
-- Ubuntu 22.04 / 24.04
-- Snort 2.9.x sudah terinstall dan berjalan
-- Python 3.10+
-- `python3-flask` atau `flask` via pip
-- Akses root / sudo
-- Telegram Bot Token + Chat ID (siapkan sebelum instalasi)
+| Komponen | Keterangan |
+|---|---|
+| Ubuntu 22.04 / 24.04 | OS yang didukung |
+| Snort 2.9.x | Sudah terinstall dan berjalan |
+| Python 3.10+ | Sudah tersedia di Ubuntu 22/24 |
+| Node.js 20+ | **Opsional** — hanya untuk WhatsApp gateway |
+| Akses root / sudo | Dibutuhkan untuk install service |
 
 ---
 
@@ -43,14 +44,24 @@ sudo systemctl restart snort
 
 ```bash
 # /etc/default/snort
-DEBIAN_SNORT_INTERFACE="ens37"   # ganti sesuai interface yang menghadap attacker
+DEBIAN_SNORT_INTERFACE="ens37"
 ```
 
-> ⚠️ Jangan set dua interface — dua proses Snort menulis ke file yang sama menyebabkan race condition dan alert hilang.
+> ⚠️ Dua instance Snort menulis ke file yang sama → race condition → alert hilang.
 
 ---
 
-## Langkah 3 — Jalankan install.sh
+## Langkah 3 — Install Node.js (hanya jika pakai WhatsApp)
+
+```bash
+curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+apt-get install -y nodejs
+node --version   # pastikan v20.x
+```
+
+---
+
+## Langkah 4 — Jalankan install.sh
 
 ```bash
 git clone https://github.com/kaylaradf/snort-gateway.git
@@ -58,70 +69,78 @@ cd snort-gateway
 sudo bash install.sh
 ```
 
-Script akan:
-1. Mengecek semua dependensi (Snort, Python, Flask, requests)
-2. Menginstall dependensi yang kurang secara otomatis
-3. Membuat direktori `/opt/ids-dashboard/`
-4. Menyalin `parser.py` dan `dashboard/`
-5. Memandu pengisian `config.ini` secara interaktif (onboarding prompt)
-6. Mengkonfigurasi sudoers untuk restart service dari dashboard
-7. Mendaftarkan dan mengaktifkan systemd service `snort-gateway`
+### Alur interaktif install.sh
 
----
+```
+━━ Mengecek Dependensi ━━
+[+] Snort ditemukan
+[+] Python 3.12 ditemukan
+[+] Flask ditemukan
+[+] Node.js v20.x ditemukan   ← atau warning jika tidak ada
 
-## Langkah 4 — Isi config.ini (jika skip saat onboarding)
+━━ Pilih Notification Gateway ━━
 
-```bash
-sudo nano /opt/ids-dashboard/config.ini
+  [1] Telegram Bot
+  [2] WhatsApp Group
+  [3] Keduanya (Telegram + WhatsApp)
+
+  Pilihan [1/2/3]: _
 ```
 
-Minimal yang harus diisi:
-- `bot_token` → token dari @BotFather
-- `chat_id` → chat ID Telegram
-
----
-
-## Langkah 5 — Test manual
-
-```bash
-python3 /opt/ids-dashboard/parser.py
+**Jika pilih Telegram (1 atau 3):**
+```
+━━ Konfigurasi ━━
+  Telegram Bot
+  Bot Token : <isi token dari @BotFather>
+  Chat ID   : <isi chat ID>
 ```
 
-Trigger alert dari Snort (misal: `ping` ke target), pastikan notif masuk Telegram dan tidak ada error.
+**Jika pilih WhatsApp (2 atau 3):**
+```
+━━ Setup WhatsApp Gateway ━━
+  Lanjutkan setup WhatsApp sekarang? (Y/n): Y
+
+  ── Step 1: Cek session WhatsApp
+  ── Step 2: Menghubungkan ke WhatsApp
+  [QR code muncul di terminal — scan dengan WhatsApp]
+  ── Step 3: Mengambil daftar group
+  ── Step 4: Pilih group tujuan notifikasi
+  ── Step 5: Konfigurasi port
+  ── Step 6: Menyimpan konfigurasi
+```
+
+Setelah setup selesai, `wa-gateway` langsung distart otomatis.
 
 ---
 
-## Langkah 6 — Start service
+## Langkah 5 — Verifikasi
 
 ```bash
-sudo systemctl start snort-gateway
+# Cek semua service
 sudo systemctl status snort-gateway
+sudo systemctl status snort-gateway-dashboard
+sudo systemctl status wa-gateway        # jika pakai WhatsApp
+
+# Akses dashboard
+http://<IP-SERVER>:5000
+
+# Monitor log
+tail -f /var/log/snort/parser.log
+journalctl -u snort-gateway -f
 ```
 
 ---
 
-## Langkah 7 — Akses Dashboard
+## Ganti Gateway Setelah Install
 
-Buka browser di: `http://<IP-SERVER>:5000`
+Toggle Telegram/WhatsApp bisa dilakukan langsung dari dashboard di halaman **Settings → Notification Channels** tanpa perlu edit file manual.
 
----
-
-## Monitoring
-
+Untuk setup ulang WhatsApp (misal ganti nomor atau group):
 ```bash
-# Log parser realtime
-tail -f /var/log/snort/parser.log
-
-# Log service
-journalctl -u snort-gateway -f
-
-# Cek alert terbaru di DB
-python3 -c "
-import sqlite3
-conn = sqlite3.connect('/var/log/snort/ids_alerts.db')
-rows = conn.execute('SELECT timestamp, sid, msg, src_ip, priority FROM alerts ORDER BY id DESC LIMIT 10').fetchall()
-for r in rows: print(r)
-"
+cd /opt/ids-dashboard/wa-gateway
+rm -rf auth_info/   # hapus session lama
+node setup.js
+sudo systemctl restart wa-gateway
 ```
 
 ---
@@ -130,21 +149,23 @@ for r in rows: print(r)
 
 | Masalah | Kemungkinan Penyebab | Fix |
 |---|---|---|
-| Parser jalan tapi tidak ada alert masuk DB | Snort tidak output ke `alert_fast` | Cek `snort.conf`, tambah `output alert_fast` |
-| Alert masuk DB tapi tidak ke Telegram | Priority > `min_priority_notify` atau kena dedup | Cek `parser.log` |
-| Alert muncul di Snort console tapi tidak di file | Dua instance Snort nulis ke file yang sama | Set satu interface di `DEBIAN_SNORT_INTERFACE` |
-| Parser crash loop di systemd | Config salah atau file tidak ada | Jalankan manual: `python3 /opt/ids-dashboard/parser.py` |
-| Dashboard tidak bisa diakses | Flask tidak jalan atau port 5000 terblokir | Cek `systemctl status snort-gateway`, cek firewall |
-| Restart service dari dashboard gagal | sudoers belum dikonfigurasi | Jalankan ulang `install.sh` atau lihat bagian sudoers di bawah |
+| Parser jalan tapi tidak ada alert masuk DB | Snort tidak output ke `alert_fast` | Cek `snort.conf` |
+| Alert masuk DB tapi tidak ke Telegram | `enabled = false` atau priority > `min_priority_notify` | Cek Settings dashboard |
+| Alert masuk DB tapi tidak ke WhatsApp | wa-gateway tidak jalan atau `enabled = false` | Cek `systemctl status wa-gateway` |
+| wa-gateway tidak jalan | `config.json` belum ada | Jalankan `node setup.js` |
+| QR tidak muncul di dashboard | wa-gateway belum start | `sudo systemctl start wa-gateway` |
+| WhatsApp logged out | Session expired | Hapus `auth_info/`, jalankan `node setup.js` ulang |
+| Dashboard tidak bisa diakses | Port 5000 terblokir | Cek firewall |
+| Restart dari dashboard gagal | sudoers belum dikonfigurasi | Jalankan ulang `install.sh` |
 
 ### Konfigurasi sudoers manual
 
-Jika restart service dari dashboard tidak berfungsi:
-
 ```bash
-echo "www-data ALL=(ALL) NOPASSWD: /bin/systemctl restart snort, /bin/systemctl restart snort-gateway" \
-  | sudo tee /etc/sudoers.d/snort-gateway
-sudo chmod 440 /etc/sudoers.d/snort-gateway
+cat > /etc/sudoers.d/snort-gateway <<EOF
+root ALL=(ALL) NOPASSWD: /bin/systemctl restart snort
+root ALL=(ALL) NOPASSWD: /bin/systemctl restart snort-gateway
+root ALL=(ALL) NOPASSWD: /bin/systemctl restart snort-gateway-dashboard
+root ALL=(ALL) NOPASSWD: /bin/systemctl restart wa-gateway
+EOF
+chmod 440 /etc/sudoers.d/snort-gateway
 ```
-
-> Ganti `www-data` dengan user yang menjalankan Flask jika berbeda.

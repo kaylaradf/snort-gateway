@@ -13,8 +13,8 @@ error() { echo -e "${RED}[✗]${NC} $1"; exit 1; }
 
 # ── Konfirmasi ────────────────────────────────────────────────────────────────
 echo -e "${RED}[!] Ini akan menghapus:${NC}"
-echo "    - systemd service snort-gateway + snort-gateway-dashboard"
-echo "    - /opt/ids-dashboard/ (parser.py, config.ini, dashboard/)"
+echo "    - systemd service snort-gateway + snort-gateway-dashboard + wa-gateway"
+echo "    - /opt/ids-dashboard/ (parser.py, config.ini, dashboard/, wa-gateway/)"
 echo "    - /var/log/snort/parser.log"
 echo "    - /var/log/snort/parser.pos"
 echo "    - /var/log/snort/dashboard-activity.log"
@@ -28,7 +28,7 @@ echo ""
 read -rp "Hapus database alerts (/var/log/snort/ids_alerts.db)? (y/N): " del_db
 
 # ── Stop & disable services ───────────────────────────────────────────────────
-for svc in snort-gateway snort-gateway-dashboard ids-parser; do
+for svc in snort-gateway snort-gateway-dashboard wa-gateway ids-parser; do
     if systemctl is-active --quiet "$svc" 2>/dev/null; then
         info "Menghentikan $svc"
         systemctl stop "$svc"

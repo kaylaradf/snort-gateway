@@ -26,6 +26,7 @@ config.read(CONFIG_PATH)
 
 BOT_TOKEN   = config["telegram"]["bot_token"]
 CHAT_ID     = config["telegram"]["chat_id"]
+TG_ENABLED  = config.getboolean("telegram", "enabled", fallback=True)
 ALERT_LOG   = config["paths"]["alert_log"]
 DB_PATH     = config["paths"]["db_path"]
 POS_FILE    = config["paths"]["pos_file"]
@@ -238,6 +239,8 @@ def build_message(alert: dict, alert_id: int) -> str:
 
 
 def send_telegram(alert: dict, alert_id: int) -> bool:
+    if not TG_ENABLED:
+        return False
     url  = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     data = {"chat_id": CHAT_ID, "text": build_message(alert, alert_id), "parse_mode": "HTML"}
     for attempt in range(3):

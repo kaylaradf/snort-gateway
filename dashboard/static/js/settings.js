@@ -138,16 +138,21 @@ async function loadWaQr() {
 
 document.getElementById('btnRefreshQr').addEventListener('click', loadWaQr);
 
-/* ── CHANNEL TOGGLES ────────────────────────────────────── */
+/* ── CHANNEL TOGGLES ───────────────────────────────────────── */
 async function loadChannelToggles() {
   const d = await fetch('/api/config').then(r => r.json());
-  const tgEl = document.getElementById('tgEnabled');
-  const waEl = document.getElementById('waEnabled');
+  const tgEl     = document.getElementById('tgEnabled');
+  const waEl     = document.getElementById('waEnabled');
   const tgStatus = document.getElementById('tgStatus');
 
   if (d.telegram) {
-    const hasToken = d.telegram.bot_token && !d.telegram.bot_token.startsWith('GANTI');
-    tgEl.checked = hasToken;
+    const hasToken = d.telegram.bot_token &&
+                     !d.telegram.bot_token.startsWith('GANTI') &&
+                     !d.telegram.bot_token.startsWith('•');
+    const explicitEnabled = d.telegram.enabled;
+    tgEl.checked = explicitEnabled !== undefined
+      ? (explicitEnabled === 'true' || explicitEnabled === '1')
+      : hasToken;
     tgStatus.textContent = hasToken ? `Chat ID: ${d.telegram.chat_id}` : 'Belum dikonfigurasi';
   }
   if (d.whatsapp) {
@@ -156,14 +161,18 @@ async function loadChannelToggles() {
 }
 
 async function saveChannelToggle(channel) {
-  const enabled = document.getElementById(channel === 'telegram' ? 'tgEnabled' : 'waEnabled').checked;
-  const section = channel;
-  const payload = { [section]: { enabled: enabled ? 'true' : 'false' } };
+  const isWa    = channel === 'whatsapp';
+  const enabled = document.getElementById(isWa ? 'waEnabled' : 'tgEnabled').checked;
   const res = await fetch('/api/config', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ [channel]: { enabled: enabled ? 'true' : 'false' } }),
   }).then(r => r.json());
-  termLog(`${channel} notifikasi ${enabled ? 'diaktifkan' : 'dinonaktifkan'}.`, res.ok ? 'success' : 'error');
+  if (res.ok) {
+    termLog(`${channel} notifikasi ${enabled ? 'diaktifkan ✓' : 'dinonaktifkan'}.`, enabled ? 'success' : 'warn');
+  } else {
+    termLog(`Gagal menyimpan toggle ${channel}.`, 'error');
+    document.getElementById(isWa ? 'waEnabled' : 'tgEnabled').checked = !enabled;
+  }
 }
 
 /* ── CONFIG EDITOR ──────────────────────────────────────── */

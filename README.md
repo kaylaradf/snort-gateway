@@ -37,7 +37,11 @@ parser.py
     ├── filter (DHCP noise SID 527, priority 0)
     ├── save → SQLite (alerts)
     ├── dedup check → notif_log (sid + src_ip, window N detik)
-    └── send → Telegram Bot API
+    ├── send → Telegram Bot API
+    └── send → wa-gateway (HTTP POST, jika enabled)
+
+wa-gateway/ (Node.js + Baileys)
+    └── kirim → WhatsApp Group
     
 /var/log/snort/ids_alerts.db
     │
@@ -56,45 +60,42 @@ dashboard/app.py (Flask, port 5000)
 ├── parser.py                   # Parser Snort alert
 ├── config.ini                  # Konfigurasi (JANGAN di-commit)
 ├── requirements.txt            # Python dependencies
-├── snort-gateway.service       # systemd unit file
+├── snort-gateway.service       # systemd unit (parser)
+├── snort-gateway-dashboard.service  # systemd unit (dashboard)
+├── wa-gateway.service          # systemd unit (WhatsApp)
 ├── local.rules                 # Snort rules yang di-cover
 ├── install.sh                  # Installer otomatis
 ├── uninstall.sh                # Uninstaller
 ├── README.md
 ├── INSTALL.md
 ├── UNINSTALL.md
-└── dashboard/
-    ├── app.py                  # Flask backend (semua API endpoint)
-    ├── templates/
-    │   ├── base.html           # Layout utama (sidebar, topbar)
-    │   ├── overview.html       # Halaman Overview
-    │   ├── eventlog.html       # Halaman Event Log
-    │   ├── analytics.html      # Halaman Analytics
-    │   ├── rules.html          # Halaman Rules
-    │   ├── settings.html       # Halaman Settings + config editor
-    │   └── about.html          # Halaman About (team)
-    ├── static/
-    │   ├── css/style.css       # Semua styles + 7 color palettes
-    │   ├── js/base.js          # Shared: clock, palette switcher, status poll
-    │   ├── js/overview.js      # Overview: KPI, charts, recent events
-    │   ├── js/eventlog.js      # Event Log: search, filter, pagination
-    │   ├── js/analytics.js     # Analytics: timeline, donut, top IPs
-    │   ├── js/rules.js         # Rules: tabel local.rules
-    │   ├── js/settings.js      # Settings: config editor, restart, terminal log
-    │   └── logorks.png         # Logo PERKUTUT
-    └── assets/
-        └── logorks.png
-
-/opt/ids-dashboard/             ← direktori instalasi runtime
-├── parser.py
-└── config.ini
-
-/var/log/snort/
-├── snort.alert.fast            # Alert log Snort (input parser)
-├── ids_alerts.db               # SQLite database
-├── parser.pos                  # Posisi baca terakhir
-├── parser.log                  # Log parser
-└── dashboard-activity.log      # Log aktivitas dashboard (settings)
+├── dashboard/
+│   ├── app.py                  # Flask backend (semua API endpoint)
+│   ├── templates/
+│   │   ├── base.html           # Layout utama (sidebar, topbar)
+│   │   ├── overview.html       # Halaman Overview
+│   │   ├── eventlog.html       # Halaman Event Log
+│   │   ├── analytics.html      # Halaman Analytics
+│   │   ├── rules.html          # Halaman Rules
+│   │   ├── settings.html       # Halaman Settings + config editor
+│   │   └── about.html          # Halaman About (team)
+│   ├── static/
+│   │   ├── css/style.css       # Semua styles + 7 color palettes
+│   │   ├── js/base.js          # Shared: clock, palette switcher, status poll
+│   │   ├── js/overview.js      # Overview: KPI, charts, recent events
+│   │   ├── js/eventlog.js      # Event Log: search, filter, pagination
+│   │   ├── js/analytics.js     # Analytics: timeline, donut, top IPs
+│   │   ├── js/rules.js         # Rules: tabel local.rules
+│   │   ├── js/settings.js      # Settings: config editor, restart, terminal log
+│   │   └── logorks.png         # Logo PERKUTUT
+│   └── assets/
+│       └── logorks.png
+└── wa-gateway/
+    ├── server.js               # HTTP gateway + Baileys WA client
+    ├── setup.js                # Onboarding: scan QR, pilih group
+    ├── package.json
+    ├── config.json             # Group JID + port (JANGAN di-commit)
+    └── auth_info/              # Session WhatsApp (JANGAN di-commit)
 ```
 
 ---
@@ -245,14 +246,17 @@ Lihat [UNINSTALL.md](./UNINSTALL.md) untuk detail apa yang dihapus.
 ```bash
 # Status
 sudo systemctl status snort-gateway
+sudo systemctl status snort-gateway-dashboard
+sudo systemctl status wa-gateway
 
 # Start / Stop / Restart
 sudo systemctl start snort-gateway
-sudo systemctl stop snort-gateway
 sudo systemctl restart snort-gateway
+sudo systemctl restart wa-gateway
 
 # Log realtime
 journalctl -u snort-gateway -f
+journalctl -u wa-gateway -f
 tail -f /var/log/snort/parser.log
 ```
 

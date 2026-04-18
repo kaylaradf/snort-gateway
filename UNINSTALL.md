@@ -13,7 +13,9 @@ Script akan meminta konfirmasi sebelum menghapus apapun, dan menawarkan opsi unt
 | Path | Keterangan |
 |---|---|
 | `snort-gateway` systemd service | Di-stop, disabled, file unit dihapus |
-| `/opt/ids-dashboard/` | Seluruh direktori instalasi (parser.py, config.ini, dashboard/) |
+| `snort-gateway-dashboard` systemd service | Di-stop, disabled, file unit dihapus |
+| `wa-gateway` systemd service | Di-stop, disabled, file unit dihapus |
+| `/opt/ids-dashboard/` | Seluruh direktori instalasi (parser.py, config.ini, dashboard/, wa-gateway/) |
 | `/var/log/snort/ids_alerts.db` | Database SQLite semua alert (**opsional**, ditanya dulu) |
 | `/var/log/snort/parser.log` | Log parser |
 | `/var/log/snort/parser.pos` | File posisi baca terakhir |
@@ -26,6 +28,7 @@ Script akan meminta konfirmasi sebelum menghapus apapun, dan menawarkan opsi unt
 - `/etc/snort/rules/local.rules` — rules Snort tidak diubah
 - `/var/log/snort/snort.alert.fast` — alert log Snort tidak disentuh
 - Snort itu sendiri tetap berjalan normal
+- Node.js tidak diuninstall
 
 ---
 
@@ -34,10 +37,12 @@ Script akan meminta konfirmasi sebelum menghapus apapun, dan menawarkan opsi unt
 Jika script tidak tersedia:
 
 ```bash
-# Stop dan hapus service
-sudo systemctl stop snort-gateway
-sudo systemctl disable snort-gateway
-sudo rm -f /etc/systemd/system/snort-gateway.service
+# Stop dan hapus semua service
+for svc in snort-gateway snort-gateway-dashboard wa-gateway; do
+  sudo systemctl stop $svc 2>/dev/null
+  sudo systemctl disable $svc 2>/dev/null
+  sudo rm -f /etc/systemd/system/${svc}.service
+done
 sudo systemctl daemon-reload
 
 # Hapus instalasi
