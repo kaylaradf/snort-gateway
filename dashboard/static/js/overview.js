@@ -35,10 +35,10 @@ function chartColors() {
 function initCharts() {
   const cc = chartColors();
   tlChart = new Chart(document.getElementById('timelineChart'), {
-    type: 'bar',
+    type: 'line',
     data: { labels: [], datasets: [
-      { label: 'P1', data: [], backgroundColor: cc.p1, stack: 'a', borderRadius: 2, borderSkipped: false },
-      { label: 'P2', data: [], backgroundColor: cc.p2, stack: 'a', borderRadius: 2, borderSkipped: false },
+      { label: 'P1', data: [], borderColor: cc.p1, backgroundColor: cc.p1.slice(0,7) + '22', fill: true, tension: 0.4, pointRadius: 0, pointHoverRadius: 4, borderWidth: 2 },
+      { label: 'P2', data: [], borderColor: cc.p2, backgroundColor: cc.p2.slice(0,7) + '18', fill: true, tension: 0.4, pointRadius: 0, pointHoverRadius: 4, borderWidth: 2 },
     ]},
     options: {
       responsive: true, maintainAspectRatio: false,
@@ -47,8 +47,8 @@ function initCharts() {
         tooltip: { mode: 'index', intersect: false },
       },
       scales: {
-        x: { grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { maxRotation: 0, color: () => getVar('--text-faint') }, stacked: true, border: { display: false }},
-        y: { grid: { color: 'rgba(255,255,255,0.03)' }, stacked: true, beginAtZero: true, ticks: { stepSize: 5, color: () => getVar('--text-faint') }, border: { display: false }},
+        x: { grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { maxRotation: 0, maxTicksLimit: 12, color: () => getVar('--text-faint') }, border: { display: false }},
+        y: { grid: { color: 'rgba(255,255,255,0.03)' }, beginAtZero: true, ticks: { stepSize: 1, color: () => getVar('--text-faint') }, border: { display: false }},
       },
     },
   });
@@ -166,8 +166,10 @@ async function loadRecentEvents() {
 function onPaletteChange() {
   setTimeout(() => {
     const cc = chartColors();
-    tlChart.data.datasets[0].backgroundColor = cc.p1;
-    tlChart.data.datasets[1].backgroundColor = cc.p2;
+    tlChart.data.datasets[0].borderColor = cc.p1;
+    tlChart.data.datasets[0].backgroundColor = cc.p1.slice(0,7) + '22';
+    tlChart.data.datasets[1].borderColor = cc.p2;
+    tlChart.data.datasets[1].backgroundColor = cc.p2.slice(0,7) + '18';
     tlChart.update('none');
     loadDonut();
   }, 50);
