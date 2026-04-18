@@ -4,22 +4,22 @@
 sudo bash uninstall.sh
 ```
 
-Script akan meminta konfirmasi sebelum menghapus apapun, dan menawarkan opsi untuk menyimpan database.
+Script meminta konfirmasi sebelum menghapus apapun, dan menawarkan opsi untuk menyimpan database alert.
 
 ---
 
 ## Yang Dihapus
 
-| Path | Keterangan |
+| Path / Service | Keterangan |
 |---|---|
-| `snort-gateway` systemd service | Di-stop, disabled, file unit dihapus |
-| `snort-gateway-dashboard` systemd service | Di-stop, disabled, file unit dihapus |
-| `wa-gateway` systemd service | Di-stop, disabled, file unit dihapus |
-| `/opt/ids-dashboard/` | Seluruh direktori instalasi (parser.py, config.ini, dashboard/, wa-gateway/) |
-| `/var/log/snort/ids_alerts.db` | Database SQLite semua alert (**opsional**, ditanya dulu) |
+| `snort-gateway.service` | Di-stop, disabled, file unit dihapus |
+| `snort-gateway-dashboard.service` | Di-stop, disabled, file unit dihapus |
+| `wa-gateway.service` | Di-stop, disabled, file unit dihapus |
+| `/opt/ids-dashboard/` | Seluruh direktori instalasi (parser, dashboard, wa-gateway, config) |
+| `/var/log/snort/ids_alerts.db` | Database SQLite semua alert (**opsional** — ditanya dulu) |
 | `/var/log/snort/parser.log` | Log parser |
 | `/var/log/snort/parser.pos` | File posisi baca terakhir |
-| `/var/log/snort/dashboard-activity.log` | Log aktivitas dashboard |
+| `/var/log/snort/dashboard-activity.log` | Log aktivitas dashboard Settings |
 | `/etc/sudoers.d/snort-gateway` | Konfigurasi sudoers untuk restart service |
 
 ## Yang TIDAK Dihapus
@@ -45,10 +45,10 @@ for svc in snort-gateway snort-gateway-dashboard wa-gateway; do
 done
 sudo systemctl daemon-reload
 
-# Hapus instalasi
+# Hapus direktori instalasi
 sudo rm -rf /opt/ids-dashboard
 
-# Hapus log (opsional)
+# Hapus log dan state (opsional)
 sudo rm -f /var/log/snort/ids_alerts.db
 sudo rm -f /var/log/snort/parser.log
 sudo rm -f /var/log/snort/parser.pos

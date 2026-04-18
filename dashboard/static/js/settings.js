@@ -184,12 +184,20 @@ const SKIP_KEYS = new Set(['enabled']);
 async function loadConfig() {
   const data = await fetch('/api/config').then(r => r.json());
   const form = document.getElementById('configForm');
-  form.innerHTML = Object.entries(data).map(([section, keys]) => `
-    <div>
+  // Skip section whatsapp (dihandle di WA Gateway card) dan section yang semua field-nya hidden
+  const SKIP_SECTIONS = new Set(['whatsapp']);
+  const SKIP_FIELDS   = new Set(['enabled', 'gateway_url', 'group_jid', 'group_name']);
+
+  form.innerHTML = Object.entries(data)
+    .filter(([section]) => !SKIP_SECTIONS.has(section))
+    .map(([section, keys]) => {
+      const visibleKeys = Object.entries(keys).filter(([k]) => !SKIP_FIELDS.has(k));
+      if (!visibleKeys.length) return '';
+      return `<div>
       <div style="font-size:0.6rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;
                   color:var(--text-faint);font-family:var(--font-ui);margin-bottom:var(--space-3)">${section}</div>
       <div style="display:flex;flex-direction:column;gap:var(--space-2)">
-        ${Object.entries(keys).filter(([k]) => k !== 'enabled').map(([k, v]) => `
+        ${visibleKeys.map(([k, v]) => `
           <div style="display:grid;grid-template-columns:140px 1fr;align-items:center;gap:var(--space-2)">
             <label style="font-size:var(--text-xs);color:var(--text-muted);font-family:var(--font-ui)"
                    for="cfg-${section}-${k}">${LABELS[k] || k}</label>
@@ -198,7 +206,8 @@ async function loadConfig() {
                    value="${v}" type="text">
           </div>`).join('')}
       </div>
-    </div>`).join('');
+    </div>`;
+    }).join('');
 }
 
 document.getElementById('btnSaveConfig').addEventListener('click', async () => {

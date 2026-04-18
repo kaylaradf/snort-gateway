@@ -492,13 +492,15 @@ def api_config_post():
     data = request.get_json()
     cfg = configparser.ConfigParser()
     cfg.read(CONFIG_PATH)
+    PROTECTED = {"enabled", "gateway_url", "group_jid", "group_name"}
     for section, keys in data.items():
         if not cfg.has_section(section):
             cfg.add_section(section)
         for key, val in keys.items():
             if key in SENSITIVE and val.startswith("••"):
                 continue  # skip masked values — don't overwrite
-            cfg.set(section, key, str(val))
+            if key not in PROTECTED:
+                cfg.set(section, key, str(val))
     with open(CONFIG_PATH, "w") as f:
         cfg.write(f)
     return jsonify({"ok": True})

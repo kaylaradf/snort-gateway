@@ -2,7 +2,7 @@
 
 **Pemantau Event & Rekon Keamanan Untuk Tindak Ulang Terstruktur**
 
-Sistem monitoring IDS berbasis Snort 2.9.x dengan pipeline lengkap: parsing alert realtime, penyimpanan ke SQLite, notifikasi Telegram, dan dashboard web interaktif.
+Sistem monitoring IDS berbasis Snort 2.9.x dengan pipeline lengkap: parsing alert realtime, penyimpanan ke SQLite, notifikasi ke Telegram dan/atau WhatsApp Group, serta dashboard web interaktif.
 
 ---
 
@@ -14,10 +14,10 @@ Sistem monitoring IDS berbasis Snort 2.9.x dengan pipeline lengkap: parsing aler
 | IDS | Snort 2.9.20 |
 | Python | 3.12.x |
 | Database | SQLite3 (stdlib) |
-| Notifikasi | Telegram Bot API |
+| Notifikasi | Telegram Bot API + WhatsApp (Baileys) |
 | Dashboard | Flask 3.x + Chart.js 4.x |
-| Service | systemd (`snort-gateway`) |
-| Dependencies | `requests>=2.31.0`, `flask>=3.0.0` |
+| Services | systemd (`snort-gateway`, `snort-gateway-dashboard`, `wa-gateway`) |
+| Dependencies | `requests`, `flask`, `node.js 20+` (opsional untuk WA) |
 
 ---
 
@@ -37,18 +37,16 @@ parser.py
     ├── filter (DHCP noise SID 527, priority 0)
     ├── save → SQLite (alerts)
     ├── dedup check → notif_log (sid + src_ip, window N detik)
-    ├── send → Telegram Bot API
-    └── send → wa-gateway (HTTP POST, jika enabled)
+    ├── [jika telegram.enabled=true]  → Telegram Bot API
+    └── [jika whatsapp.enabled=true]  → wa-gateway (HTTP POST :3001)
+                                              └── Baileys → WhatsApp Group
 
-wa-gateway/ (Node.js + Baileys)
-    └── kirim → WhatsApp Group
-    
 /var/log/snort/ids_alerts.db
     │
     │  read-only queries
     ▼
 dashboard/app.py (Flask, port 5000)
-    └── browser → http://<server>:5000
+    └── http://<server>:5000
 ```
 
 ---
@@ -56,56 +54,54 @@ dashboard/app.py (Flask, port 5000)
 ## Struktur Direktori
 
 ```
-/root/ids-gateway/              ← repo utama
-├── parser.py                   # Parser Snort alert
-├── config.ini                  # Konfigurasi (JANGAN di-commit)
-├── requirements.txt            # Python dependencies
-├── snort-gateway.service       # systemd unit (parser)
-├── snort-gateway-dashboard.service  # systemd unit (dashboard)
-├── wa-gateway.service          # systemd unit (WhatsApp)
-├── local.rules                 # Snort rules yang di-cover
-├── install.sh                  # Installer otomatis
-├── uninstall.sh                # Uninstaller
-├── README.md
-├── INSTALL.md
-├── UNINSTALL.md
+snort-gateway/                       ← repo
+├── parser.py                        # Parser Snort alert
+├── requirements.txt                 # Python dependencies
+├── snort-gateway.service            # systemd: parser
+├── snort-gateway-dashboard.service  # systemd: dashboard
+├── wa-gateway.service               # systemd: WhatsApp gateway
+├── local.rules                      # Snort rules yang di-cover
+├── install.sh                       # Installer interaktif
+├── uninstall.sh                     # Uninstaller
+├── README.md / INSTALL.md / UNINSTALL.md
 ├── dashboard/
-│   ├── app.py                  # Flask backend (semua API endpoint)
+│   ├── app.py                       # Flask backend + semua API endpoint
 │   ├── templates/
-│   │   ├── base.html           # Layout utama (sidebar, topbar)
-│   │   ├── overview.html       # Halaman Overview
-│   │   ├── eventlog.html       # Halaman Event Log
-│   │   ├── analytics.html      # Halaman Analytics
-│   │   ├── rules.html          # Halaman Rules
-│   │   ├── settings.html       # Halaman Settings + config editor
-│   │   └── about.html          # Halaman About (team)
-│   ├── static/
-│   │   ├── css/style.css       # Semua styles + 7 color palettes
-│   │   ├── js/base.js          # Shared: clock, palette switcher, status poll
-│   │   ├── js/overview.js      # Overview: KPI, charts, recent events
-│   │   ├── js/eventlog.js      # Event Log: search, filter, pagination
-│   │   ├── js/analytics.js     # Analytics: timeline, donut, top IPs
-│   │   ├── js/rules.js         # Rules: tabel local.rules
-│   │   ├── js/settings.js      # Settings: config editor, restart, terminal log
-│   │   └── logorks.png         # Logo PERKUTUT
-│   └── assets/
-│       └── logorks.png
+│   │   ├── base.html                # Layout (sidebar, topbar, palette)
+│   │   ├── overview.html            # KPI, chart, recent events
+│   │   ├── eventlog.html            # Tabel alert + search + filter
+│   │   ├── analytics.html           # Timeline, donut, top IPs
+│   │   ├── rules.html               # Tabel local.rules
+│   │   ├── settings.html            # Config editor, WA gateway, activity log
+│   │   └── about.html               # Info tim
+│   └── static/
+│       ├── css/style.css            # Styles + 8 color palettes (incl. Light)
+│       ├── js/base.js               # Clock, palette switcher, page transition
+│       ├── js/overview.js           # Overview page logic
+│       ├── js/eventlog.js           # Event log + search debounce
+│       ├── js/analytics.js          # Analytics charts
+│       ├── js/rules.js              # Rules table
+│       ├── js/settings.js           # Settings page logic
+│       └── logorks.png              # Logo PERKUTUT
 └── wa-gateway/
-    ├── server.js               # HTTP gateway + Baileys WA client
-    ├── setup.js                # Onboarding: scan QR, pilih group
+    ├── server.js                    # HTTP server + Baileys WA client
+    ├── setup.js                     # Onboarding: scan QR, pilih group
     ├── package.json
-    ├── config.json             # Group JID + port (JANGAN di-commit)
-    └── auth_info/              # Session WhatsApp (JANGAN di-commit)
+    ├── config.json                  # Group JID + port  ← JANGAN di-commit
+    └── auth_info/                   # Session WhatsApp  ← JANGAN di-commit
 ```
 
 ---
 
 ## Konfigurasi (`config.ini`)
 
+File ini dibuat otomatis oleh `install.sh`. Lokasi: `/opt/ids-dashboard/config.ini`
+
 ```ini
 [telegram]
 bot_token = <your_bot_token>
 chat_id   = <your_chat_id>
+enabled   = true              # true/false — aktifkan notifikasi Telegram
 
 [paths]
 alert_log = /var/log/snort/snort.alert.fast
@@ -114,13 +110,18 @@ pos_file  = /var/log/snort/parser.pos
 log_file  = /var/log/snort/parser.log
 
 [settings]
-dedup_window_seconds   = 5      # sid+src_ip sama dalam N detik → skip notif
-min_priority_notify    = 2      # priority > nilai ini → simpan DB saja, tidak notif
-poll_interval_seconds  = 1      # interval polling alert log
+dedup_window_seconds   = 5    # sid+src_ip sama dalam N detik → skip notif
+min_priority_notify    = 2    # priority > nilai ini → simpan DB saja, tidak notif
+poll_interval_seconds  = 1    # interval polling alert log
 max_notif_per_category = 1
+
+[whatsapp]
+enabled     = false           # true/false — aktifkan notifikasi WhatsApp
+gateway_url = http://127.0.0.1:3001/send
 ```
 
-> Config juga bisa diedit langsung dari dashboard di halaman **Settings**.
+> Config bisa diedit dari dashboard di halaman **Settings → config.ini**.
+> Field `enabled` dikelola terpisah — **jangan edit manual** kecuali terpaksa.
 
 ### Cara dapat Bot Token & Chat ID Telegram
 1. Buka [@BotFather](https://t.me/BotFather) → `/newbot` → copy token
@@ -134,7 +135,7 @@ max_notif_per_category = 1
 | Kolom | Tipe | Keterangan |
 |---|---|---|
 | id | INTEGER PK | Auto increment |
-| timestamp | TEXT | Format: `YYYY-MM-DD HH:MM:SS WIB` |
+| timestamp | TEXT | `YYYY-MM-DD HH:MM:SS WIB` |
 | src_ip | TEXT | Source IP |
 | src_port | INTEGER | NULL untuk ICMP |
 | dst_ip | TEXT | Destination IP |
@@ -170,7 +171,7 @@ max_notif_per_category = 1
 | 1418 | SNMP request tcp | Reconnaissance |
 | 1421 | SNMP AgentX/tcp request | Reconnaissance |
 | 1000099 | ICMP PING Detected | ICMP |
-| 1000001–1000004 | HTTP GET/POST/PUT/DELETE WP Container | Web Traffic |
+| 1000001–1000004 | HTTP GET/POST/PUT/DELETE | Web Traffic |
 | 2000001–2000005 | Possible Nmap SYN/FIN/NULL/XMAS/UDP Scan | Reconnaissance |
 | 2100001–2100003 | Nmap HTTP Probe / Aggressive Scan | Reconnaissance |
 
@@ -180,12 +181,14 @@ max_notif_per_category = 1
 
 | Kondisi | Aksi |
 |---|---|
-| Priority 1 | 🔴 CRITICAL — selalu notif Telegram |
-| Priority 2 | 🟠 WARNING — selalu notif Telegram |
+| Priority 1 | 🔴 CRITICAL — notif ke channel yang aktif |
+| Priority 2 | 🟠 WARNING — notif ke channel yang aktif |
 | Priority 3+ | Simpan DB saja, tidak notif |
 | Priority 0 | Skip sepenuhnya |
 | SID 527 dari `0.0.0.0` / `::` | Skip (DHCP noise) |
 | `sid + src_ip` sama dalam `dedup_window_seconds` | Skip notif, tetap masuk DB |
+| `telegram.enabled = false` | Skip Telegram |
+| `whatsapp.enabled = false` | Skip WhatsApp |
 
 ---
 
@@ -195,11 +198,11 @@ Akses di `http://<server-ip>:5000`
 
 | Halaman | Fungsi |
 |---|---|
-| Overview | KPI cards, timeline chart, donut by category, top IPs, top rules, recent events |
-| Event Log | Tabel semua alert, search (ip/port/sid/msg/category), filter priority, pagination |
-| Analytics | Timeline multi-range (1H/6H/24H/7D/30D), top IPs bar chart, by protocol |
+| Overview | KPI cards, line chart (5-min bucket), donut by category, top IPs, top rules, recent events |
+| Event Log | Tabel semua alert, search dengan debounce (ip/port/sid/msg/category), filter priority, pagination |
+| Analytics | Timeline multi-range (1H/6H/24H/7D/30D), top IPs bar chart, donut, by protocol |
 | Rules | Tabel semua rule dari `local.rules` |
-| Settings | Status service, config.ini editor, restart Snort/Parser, terminal activity log |
+| Settings | System status + restart, WhatsApp gateway info + ganti group, config.ini editor, activity log |
 | About | Info tim pengembang |
 
 ### Color Palettes
@@ -209,16 +212,16 @@ Midnight (default) · Dracula · Monokai · Solarized · One Dark · Tokyo Night
 
 ## Snort Requirements
 
-### `snort.conf`
 ```
+# /etc/snort/snort.conf
 output alert_fast: snort.alert.fast
 ```
 
-### Interface — satu saja
 ```bash
-# /etc/default/snort
+# /etc/default/snort — satu interface saja
 DEBIAN_SNORT_INTERFACE="ens37"
 ```
+
 > Dua instance Snort menulis ke file yang sama → race condition → alert hilang.
 
 ---
@@ -226,6 +229,8 @@ DEBIAN_SNORT_INTERFACE="ens37"
 ## Instalasi
 
 ```bash
+git clone https://github.com/kaylaradf/snort-gateway.git
+cd snort-gateway
 sudo bash install.sh
 ```
 
@@ -237,7 +242,7 @@ Lihat [INSTALL.md](./INSTALL.md) untuk panduan lengkap.
 sudo bash uninstall.sh
 ```
 
-Lihat [UNINSTALL.md](./UNINSTALL.md) untuk detail apa yang dihapus.
+Lihat [UNINSTALL.md](./UNINSTALL.md) untuk detail.
 
 ---
 
@@ -249,9 +254,9 @@ sudo systemctl status snort-gateway
 sudo systemctl status snort-gateway-dashboard
 sudo systemctl status wa-gateway
 
-# Start / Stop / Restart
-sudo systemctl start snort-gateway
+# Restart
 sudo systemctl restart snort-gateway
+sudo systemctl restart snort-gateway-dashboard
 sudo systemctl restart wa-gateway
 
 # Log realtime
@@ -264,7 +269,7 @@ tail -f /var/log/snort/parser.log
 
 ## Catatan Keamanan
 
-- `config.ini` mengandung Telegram credentials — **jangan di-commit ke git** (sudah ada di `.gitignore`)
-- Dashboard berjalan di port 5000, tidak ada autentikasi — **batasi akses dengan firewall** ke IP tertentu saja
-- Dashboard hanya read-only ke database, kecuali fitur edit config dan restart service
-- Restart service dari dashboard membutuhkan `sudo` tanpa password untuk `systemctl` — konfigurasi di `/etc/sudoers.d/snort-gateway`
+- `config.ini` mengandung Telegram credentials — **jangan di-commit** (sudah ada di `.gitignore`)
+- `wa-gateway/config.json` dan `wa-gateway/auth_info/` — **jangan di-commit**
+- Dashboard berjalan di port 5000 tanpa autentikasi — **batasi akses dengan firewall**
+- Restart service dari dashboard membutuhkan sudoers — dikonfigurasi otomatis oleh `install.sh`
