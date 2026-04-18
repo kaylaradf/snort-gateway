@@ -8,6 +8,7 @@ function catBadge(n) { return CAT_BADGE[n] || 'badge-http'; }
 
 let currentPage = 1;
 let activePriority = null;
+let dateStart = '', dateEnd = '';
 
 /* load categories into select */
 async function loadCategories() {
@@ -24,9 +25,11 @@ async function loadEvents() {
   const q    = document.getElementById('searchInput').value.trim();
   const cat  = document.getElementById('catSelect').value;
   const params = new URLSearchParams({ page: currentPage });
-  if (q)             params.set('q', q);
+  if (q)              params.set('q', q);
   if (activePriority) params.set('priority', activePriority);
-  if (cat)           params.set('category', cat);
+  if (cat)            params.set('category', cat);
+  if (dateStart)      params.set('start', dateStart);
+  if (dateEnd)        params.set('end', dateEnd);
 
   const d = await fetch('/api/events?' + params).then(r => r.json());
 
@@ -80,6 +83,21 @@ document.getElementById('searchInput').addEventListener('keydown', e => {
 });
 document.getElementById('btnSearch').addEventListener('click', doSearch);
 document.getElementById('catSelect').addEventListener('change', () => { currentPage = 1; loadEvents(); });
+
+/* date range */
+document.getElementById('btnApplyDate').addEventListener('click', () => {
+  dateStart = document.getElementById('dateStart').value;
+  dateEnd   = document.getElementById('dateEnd').value;
+  currentPage = 1;
+  loadEvents();
+});
+document.getElementById('btnClearDate').addEventListener('click', () => {
+  dateStart = ''; dateEnd = '';
+  document.getElementById('dateStart').value = '';
+  document.getElementById('dateEnd').value = '';
+  currentPage = 1;
+  loadEvents();
+});
 
 /* polling */
 let countdown = 5;

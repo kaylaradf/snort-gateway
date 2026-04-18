@@ -415,3 +415,26 @@ button{cursor:pointer;background:none;border:none;font:inherit;color:inherit;}
 }
 .team-btn:hover{background:var(--accent-dim);color:var(--accent);border-color:transparent;}
 .team-btn svg{width:12px;height:12px;flex-shrink:0;}
+
+/* ─── PAGE TRANSITION ────────────────────────────────────── */
+@keyframes pageIn {
+  from { opacity:0; transform:translateY(8px); }
+  to   { opacity:1; transform:translateY(0); }
+}
+.content { animation: pageIn 220ms cubic-bezier(0.16,1,0.3,1) both; }
+.content.page-exit { opacity:0; transform:translateY(-6px); transition: opacity 120ms ease, transform 120ms ease; }
+
+/* ─── DATE RANGE PICKER ──────────────────────────────────── */
+.date-range-row {
+  display:flex;align-items:center;gap:var(--space-2);flex-wrap:wrap;
+}
+.date-input {
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius-md);padding:2px var(--space-3);
+  font-size:var(--text-xs);font-family:var(--font-mono);
+  color:var(--text);outline:none;transition:border-color var(--ease);
+  color-scheme: dark;
+}
+[data-palette="light"] .date-input { color-scheme: light; }
+.date-input:focus { border-color:var(--accent); }
+.date-sep { font-size:var(--text-xs);color:var(--text-faint); }

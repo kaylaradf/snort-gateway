@@ -220,14 +220,23 @@ def api_recent_events():
 def api_events():
     from flask import request
     db   = get_db()
-    q    = request.args.get("q", "").strip()
-    p    = request.args.get("priority", "")
-    cat  = request.args.get("category", "")
-    page = max(1, int(request.args.get("page", 1)))
-    per  = 50
+    q     = request.args.get("q", "").strip()
+    p     = request.args.get("priority", "")
+    cat   = request.args.get("category", "")
+    start = request.args.get("start", "")
+    end   = request.args.get("end", "")
+    page  = max(1, int(request.args.get("page", 1)))
+    per   = 50
 
     sql    = "FROM alerts WHERE 1=1"
     params = []
+
+    if start:
+        sql += " AND created_at >= ?"
+        params.append(start + " 00:00:00")
+    if end:
+        sql += " AND created_at <= ?"
+        params.append(end + " 23:59:59")
 
     if q:
         # search across msg, sid, src_ip, dst_ip, category, port
@@ -282,34 +291,47 @@ def api_event_categories():
 
 @app.route("/api/analytics/timeline")
 def api_analytics_timeline():
-    from flask import request
     db    = get_db()
     rang  = request.args.get("range", "24h")
+    start = request.args.get("start", "")
+    end   = request.args.get("end", "")
 
-    if rang == "1h":
-        since  = now_wib() - timedelta(hours=1)
-        bucket = "%Y-%m-%d %H:%M"
-    elif rang == "6h":
-        since  = now_wib() - timedelta(hours=6)
-        bucket = "%Y-%m-%d %H:%M"
-    elif rang == "7d":
-        since  = now_wib() - timedelta(days=7)
+    if start and end:
+        since_str = start + " 00:00:00"
+        until_str = end   + " 23:59:59"
         bucket = "%Y-%m-%d"
-    elif rang == "30d":
-        since  = now_wib() - timedelta(days=30)
-        bucket = "%Y-%m-%d"
-    else:  # 24h default
-        since  = now_wib() - timedelta(hours=24)
-        bucket = "%Y-%m-%d %H:00"
+    elif start:
+        since_str = start + " 00:00:00"
+        until_str = None
+        bucket = "%Y-%m-%d %H:%M"
+    else:
+        if rang == "1h":
+            since_dt = now_wib() - timedelta(hours=1);  bucket = "%Y-%m-%d %H:%M"
+        elif rang == "6h":
+            since_dt = now_wib() - timedelta(hours=6);  bucket = "%Y-%m-%d %H:%M"
+        elif rang == "7d":
+            since_dt = now_wib() - timedelta(days=7);   bucket = "%Y-%m-%d"
+        elif rang == "30d":
+            since_dt = now_wib() - timedelta(days=30);  bucket = "%Y-%m-%d"
+        else:
+            since_dt = now_wib() - timedelta(hours=24); bucket = "%Y-%m-%d %H:00"
+        since_str = since_dt.strftime("%Y-%m-%d %H:%M:%S")
+        until_str = None
+
+    where = "created_at >= ?"
+    params = [since_str]
+    if until_str:
+        where += " AND created_at <= ?"
+        params.append(until_str)
 
     rows = db.execute(
         f"""SELECT strftime('{bucket}', created_at) as t,
                    SUM(CASE WHEN priority=1 THEN 1 ELSE 0 END) as p1,
                    SUM(CASE WHEN priority=2 THEN 1 ELSE 0 END) as p2,
                    COUNT(*) as total
-            FROM alerts WHERE created_at >= ?
+            FROM alerts WHERE {where}
             GROUP BY t ORDER BY t""",
-        (since.strftime("%Y-%m-%d %H:%M:%S"),)
+        params
     ).fetchall()
     def shift_bucket(t, fmt):
         try:
@@ -317,59 +339,76 @@ def api_analytics_timeline():
             return dt.strftime(fmt)
         except Exception:
             return t
-    fmt = "%Y-%m-%d" if rang in ("7d", "30d") else ("%Y-%m-%d %H:00" if rang == "24h" else "%Y-%m-%d %H:%M")
-    return jsonify([{"t": shift_bucket(r["t"], fmt), "p1": r["p1"], "p2": r["p2"], "total": r["total"]} for r in rows])
+    # only shift time-based buckets, not date-only
+    do_shift = bucket != "%Y-%m-%d"
+    return jsonify([{"t": shift_bucket(r["t"], bucket) if do_shift else r["t"],
+                    "p1": r["p1"], "p2": r["p2"], "total": r["total"]} for r in rows])
 
 
 @app.route("/api/analytics/by_category")
 def api_analytics_category():
-    from flask import request
     db   = get_db()
-    rang = request.args.get("range", "24h")
-    since = _since(rang)
+    rang  = request.args.get("range", "24h")
+    start = request.args.get("start", "")
+    end   = request.args.get("end", "")
+    since, until = _since(rang, start, end)
+    where  = "created_at >= ?"
+    params = [since]
+    if until: where += " AND created_at <= ?"; params.append(until)
     rows = db.execute(
-        """SELECT COALESCE(category,'Unknown') as category, COUNT(*) as count
-           FROM alerts WHERE created_at >= ?
-           GROUP BY category ORDER BY count DESC""",
-        (since,)
+        f"SELECT COALESCE(category,'Unknown') as category, COUNT(*) as count"
+        f" FROM alerts WHERE {where} GROUP BY category ORDER BY count DESC",
+        params
     ).fetchall()
     return jsonify([{"category": r["category"], "count": r["count"]} for r in rows])
 
 
 @app.route("/api/analytics/top_ips")
 def api_analytics_top_ips():
-    from flask import request
     db   = get_db()
-    rang = request.args.get("range", "24h")
-    since = _since(rang)
+    rang  = request.args.get("range", "24h")
+    start = request.args.get("start", "")
+    end   = request.args.get("end", "")
+    since, until = _since(rang, start, end)
+    where  = "created_at >= ?"
+    params = [since]
+    if until: where += " AND created_at <= ?"; params.append(until)
     rows = db.execute(
-        """SELECT src_ip, COUNT(*) as count,
-                  SUM(CASE WHEN priority=1 THEN 1 ELSE 0 END) as p1
-           FROM alerts WHERE created_at >= ?
-           GROUP BY src_ip ORDER BY count DESC LIMIT 10""",
-        (since,)
+        f"SELECT src_ip, COUNT(*) as count,"
+        f" SUM(CASE WHEN priority=1 THEN 1 ELSE 0 END) as p1"
+        f" FROM alerts WHERE {where} GROUP BY src_ip ORDER BY count DESC LIMIT 10",
+        params
     ).fetchall()
     return jsonify([{"ip": r["src_ip"], "count": r["count"], "p1": r["p1"]} for r in rows])
 
 
 @app.route("/api/analytics/by_protocol")
 def api_analytics_protocol():
-    from flask import request
     db   = get_db()
-    rang = request.args.get("range", "24h")
-    since = _since(rang)
+    rang  = request.args.get("range", "24h")
+    start = request.args.get("start", "")
+    end   = request.args.get("end", "")
+    since, until = _since(rang, start, end)
+    where  = "created_at >= ?"
+    params = [since]
+    if until: where += " AND created_at <= ?"; params.append(until)
     rows = db.execute(
-        """SELECT protocol, COUNT(*) as count FROM alerts
-           WHERE created_at >= ? GROUP BY protocol ORDER BY count DESC""",
-        (since,)
+        f"SELECT protocol, COUNT(*) as count FROM alerts"
+        f" WHERE {where} GROUP BY protocol ORDER BY count DESC",
+        params
     ).fetchall()
     return jsonify([{"protocol": r["protocol"], "count": r["count"]} for r in rows])
 
 
-def _since(rang):
-    m = {"1h": 1, "6h": 6, "24h": 24, "7d": 168, "30d": 720}
+def _since(rang, start=None, end=None):
+    """Return (since_str, until_str). Supports preset range or custom start/end."""
+    if start and end:
+        return start + " 00:00:00", end + " 23:59:59"
+    if start:
+        return start + " 00:00:00", None
+    m = {"1h": 1, "6h": 6, "24h": 24, "3d": 72, "7d": 168, "30d": 720}
     h = m.get(rang, 24)
-    return (now_wib() - timedelta(hours=h)).strftime("%Y-%m-%d %H:%M:%S")
+    return (now_wib() - timedelta(hours=h)).strftime("%Y-%m-%d %H:%M:%S"), None
 
 # ─── API: RULES ───────────────────────────────────────────────────────────────
 
