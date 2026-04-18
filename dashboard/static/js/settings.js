@@ -99,7 +99,7 @@ async function loadWaStatus() {
   const statusEl = document.getElementById('waStatus');
   const qrWrap   = document.getElementById('waQrWrap');
   const btnQr    = document.getElementById('btnRefreshQr');
-  const groupEl  = document.getElementById('waGroup');
+  const groupEl  = document.getElementById('waCurrentGroup');
 
   if (!d.ok) {
     statusEl.textContent = 'Gateway tidak berjalan';
@@ -136,7 +136,7 @@ async function loadWaQr() {
   }
 }
 
-document.getElementById('btnRefreshQr').addEventListener('click', loadWaQr);
+document.getElementById('btnRefreshQr')?.addEventListener('click', loadWaQr);
 
 /* ── WHATSAPP GROUP ─────────────────────────────────────── */
 async function loadWaGroup() {
