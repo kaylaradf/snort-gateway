@@ -142,22 +142,24 @@ def api_timeline():
     today = now.strftime("%Y-%m-%d")
     since = today + " 00:00:00"
 
+    # Bucket per 5 menit — max 288 points untuk satu hari
     rows = db.execute(
-        """SELECT strftime('%H:%M', created_at) as t,
+        """SELECT strftime('%H:%M', datetime(strftime('%s', created_at) - strftime('%s', created_at) % 300, 'unixepoch')) as t,
                   SUM(CASE WHEN priority=1 THEN 1 ELSE 0 END) as p1,
                   SUM(CASE WHEN priority=2 THEN 1 ELSE 0 END) as p2
            FROM alerts
            WHERE created_at >= ?
-           GROUP BY strftime('%Y-%m-%d %H:%M', created_at)
-           ORDER BY t""",
+           GROUP BY t ORDER BY t""",
         (since,)
     ).fetchall()
 
-    # Build full minute-by-minute map from 00:00 to now, fill 0 for empty buckets
+    # Build full 5-min bucket map from 00:00 to now, fill 0 for empty buckets
     data_map = {r["t"]: (r["p1"], r["p2"]) for r in rows}
     labels, p1s, p2s = [], [], []
     cur = now.replace(hour=0, minute=0, second=0, microsecond=0)
     end = now.replace(second=0, microsecond=0)
+    # round end down to nearest 5-min
+    end = end.replace(minute=(end.minute // 5) * 5)
     while cur <= end:
         label = (cur + timedelta(hours=7)).strftime("%H:%M")
         key   = cur.strftime("%H:%M")
@@ -165,7 +167,7 @@ def api_timeline():
         labels.append(label)
         p1s.append(p1)
         p2s.append(p2)
-        cur += timedelta(minutes=1)
+        cur += timedelta(minutes=5)
 
     return jsonify([{"t": labels[i], "p1": p1s[i], "p2": p2s[i]} for i in range(len(labels))])
 

@@ -73,12 +73,18 @@ document.getElementById('priorityChips').addEventListener('click', e => {
   loadEvents();
 });
 
-/* search: trigger on Enter or button click, not realtime */
+/* search: Enter, button click, atau auto-search setelah 600ms berhenti ketik */
 function doSearch() { currentPage = 1; loadEvents(); }
-document.getElementById('searchInput').addEventListener('keydown', e => {
-  if (e.key === 'Enter') doSearch();
+
+let _searchTimer;
+document.getElementById('searchInput').addEventListener('input', () => {
+  clearTimeout(_searchTimer);
+  _searchTimer = setTimeout(doSearch, 600);
 });
-document.getElementById('btnSearch').addEventListener('click', doSearch);
+document.getElementById('searchInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { clearTimeout(_searchTimer); doSearch(); }
+});
+document.getElementById('btnSearch').addEventListener('click', () => { clearTimeout(_searchTimer); doSearch(); });
 document.getElementById('catSelect').addEventListener('change', () => { currentPage = 1; loadEvents(); });
 
 /* polling */
