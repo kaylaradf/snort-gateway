@@ -5,7 +5,7 @@
 # This file intentionally does not come with signatures.  Put your local
 # additions here.
 
-alert icmp any any -> any any (msg: "ICMP PING: Detected"; priority:3; sid:1000099;rev:1;)
+alert icmp any any -> $HOME_NET any (msg: "ICMP PING: Detected"; priority:3; sid:1000099;rev:1;)
 
 # $Id: local.rules,v 1.11 2004/07/23 20:15:44 bmc Exp $
 # ----------------
@@ -32,4 +32,4 @@ alert tcp any any -> $HOME_NET 80 (msg:"Nmap HTTP Probe HEAD (-sV)"; content:"HE
 alert tcp any any -> $HOME_NET 80 (msg:"NMAP HTTP Probe No User Agent (-sV)"; content:!"User-Agent"; http_header; classtype:attempted-recon; sid:2100002; rev:1;)
 
 #NMAP AGGRESSIVE SCAN
-alert tcp any any -> $HOME_NET any (msg:"ET SCAN Nmap Aggressive Scan Detected"; flags:S; detection_filter:track by_src, count 10, seconds 10; classtype:attempted-recon; sid:2100003; rev:1;)
+alert tcp any any -> $HOME_NET any (msg:"ET SCAN Nmap Aggressive Scan Detected"; flags:S; detection_filter:track by_src, count 10, seconds 10; classtype:attempted-recon; priority:1; sid:2100003; rev:1;)
