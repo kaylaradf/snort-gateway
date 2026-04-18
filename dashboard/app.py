@@ -458,6 +458,24 @@ def api_status():
 SENSITIVE = {"bot_token", "chat_id"}
 WA_GATEWAY_URL = "http://127.0.0.1:3001"
 
+@app.route("/api/toggle", methods=["POST"])
+def api_toggle():
+    """Dedicated endpoint untuk toggle enabled/disabled per channel.
+    Atomic — tidak bisa di-race dengan /api/config POST."""
+    data    = request.get_json()
+    channel = data.get("channel", "")   # 'telegram' atau 'whatsapp'
+    enabled = data.get("enabled", True)
+    if channel not in ("telegram", "whatsapp"):
+        return jsonify({"ok": False, "error": "invalid channel"}), 400
+    cfg = configparser.ConfigParser()
+    cfg.read(CONFIG_PATH)
+    if not cfg.has_section(channel):
+        cfg.add_section(channel)
+    cfg.set(channel, "enabled", "true" if enabled else "false")
+    with open(CONFIG_PATH, "w") as f:
+        cfg.write(f)
+    return jsonify({"ok": True, "channel": channel, "enabled": enabled})
+
 @app.route("/api/config", methods=["GET"])
 def api_config_get():
     cfg = configparser.ConfigParser()

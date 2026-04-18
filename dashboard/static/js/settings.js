@@ -162,16 +162,26 @@ async function loadChannelToggles() {
 
 async function saveChannelToggle(channel) {
   const isWa    = channel === 'whatsapp';
-  const enabled = document.getElementById(isWa ? 'waEnabled' : 'tgEnabled').checked;
-  const res = await fetch('/api/config', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ [channel]: { enabled: enabled ? 'true' : 'false' } }),
-  }).then(r => r.json());
-  if (res.ok) {
-    termLog(`${channel} notifikasi ${enabled ? 'diaktifkan ✓' : 'dinonaktifkan'}.`, enabled ? 'success' : 'warn');
-  } else {
-    termLog(`Gagal menyimpan toggle ${channel}.`, 'error');
-    document.getElementById(isWa ? 'waEnabled' : 'tgEnabled').checked = !enabled;
+  const elId    = isWa ? 'waEnabled' : 'tgEnabled';
+  const enabled = document.getElementById(elId).checked;
+  // disable toggle sementara selama save
+  document.getElementById(elId).disabled = true;
+  try {
+    const res = await fetch('/api/toggle', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ channel, enabled }),
+    }).then(r => r.json());
+    if (res.ok) {
+      termLog(`${channel} notifikasi ${enabled ? 'diaktifkan ✓' : 'dinonaktifkan'}.`, enabled ? 'success' : 'warn');
+    } else {
+      termLog(`Gagal menyimpan toggle ${channel}.`, 'error');
+      document.getElementById(elId).checked = !enabled;
+    }
+  } catch (_) {
+    termLog(`Error saat toggle ${channel}.`, 'error');
+    document.getElementById(elId).checked = !enabled;
+  } finally {
+    document.getElementById(elId).disabled = false;
   }
 }
 
@@ -196,7 +206,7 @@ async function loadConfig() {
       <div style="font-size:0.6rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;
                   color:var(--text-faint);font-family:var(--font-ui);margin-bottom:var(--space-3)">${section}</div>
       <div style="display:flex;flex-direction:column;gap:var(--space-2)">
-        ${Object.entries(keys).map(([k, v]) => `
+        ${Object.entries(keys).filter(([k]) => k !== 'enabled').map(([k, v]) => `
           <div style="display:grid;grid-template-columns:140px 1fr;align-items:center;gap:var(--space-2)">
             <label style="font-size:var(--text-xs);color:var(--text-muted);font-family:var(--font-ui)"
                    for="cfg-${section}-${k}">${LABELS[k] || k}</label>
@@ -271,3 +281,4 @@ loadWaStatus();
 
 setInterval(loadStatus, 10000);
 setInterval(loadWaStatus, 8000);
+// loadChannelToggles tidak di-poll — hanya load sekali saat init dan setelah save
