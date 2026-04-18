@@ -61,11 +61,25 @@ command -v systemctl &>/dev/null || error "systemd tidak ditemukan"
 info "systemd ditemukan"
 
 if command -v node &>/dev/null; then
-    info "Node.js $(node --version) ditemukan"
+    NODE_MAJOR=$(node --version | tr -d 'v' | cut -d. -f1)
+    if [[ "$NODE_MAJOR" -ge 20 ]]; then
+        info "Node.js $(node --version) ditemukan"
+    else
+        warn "Node.js $(node --version) terlalu lama (butuh >=20), mengupgrade..."
+        curl -fsSL https://deb.nodesource.com/setup_20.x | bash - &>/dev/null
+        apt-get install -y nodejs &>/dev/null
+        info "Node.js $(node --version) terinstall"
+    fi
 else
-    warn "Node.js tidak ditemukan — WhatsApp gateway tidak tersedia"
-    warn "Install: curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && apt-get install -y nodejs"
-    NO_NODE=1
+    warn "Node.js tidak ditemukan, menginstall Node.js 20..."
+    if curl -fsSL https://deb.nodesource.com/setup_20.x | bash - &>/dev/null && \
+       apt-get install -y nodejs &>/dev/null; then
+        info "Node.js $(node --version) terinstall"
+    else
+        warn "Gagal install Node.js - WhatsApp gateway tidak tersedia"
+        warn "Install manual: curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && apt-get install -y nodejs"
+        NO_NODE=1
+    fi
 fi
 
 # ── Cek file source ───────────────────────────────────────────────────────────
