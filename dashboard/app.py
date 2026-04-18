@@ -578,5 +578,40 @@ def api_wa_qr():
         return jsonify({"qr": None})
 
 
+@app.route("/api/wa/groups")
+def api_wa_groups():
+    """Baca daftar group dari wa-gateway/config.json."""
+    import json as _json
+    wa_config = os.path.join(os.path.dirname(CONFIG_PATH), "wa-gateway", "config.json")
+    try:
+        with open(wa_config) as f:
+            cfg = _json.load(f)
+        return jsonify({"ok": True, "current": cfg})
+    except Exception:
+        return jsonify({"ok": False, "current": None})
+
+
+@app.route("/api/wa/setgroup", methods=["POST"])
+def api_wa_setgroup():
+    """Update group_jid dan group_name di wa-gateway/config.json."""
+    import json as _json
+    wa_config = os.path.join(os.path.dirname(CONFIG_PATH), "wa-gateway", "config.json")
+    data = request.get_json()
+    jid  = data.get("group_jid", "").strip()
+    name = data.get("group_name", "").strip()
+    if not jid:
+        return jsonify({"ok": False, "error": "group_jid required"}), 400
+    try:
+        with open(wa_config) as f:
+            cfg = _json.load(f)
+        cfg["group_jid"]  = jid
+        cfg["group_name"] = name or jid
+        with open(wa_config, "w") as f:
+            _json.dump(cfg, f, indent=2)
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=False)

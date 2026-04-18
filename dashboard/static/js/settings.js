@@ -138,49 +138,35 @@ async function loadWaQr() {
 
 document.getElementById('btnRefreshQr').addEventListener('click', loadWaQr);
 
-/* ── CHANNEL TOGGLES ───────────────────────────────────────── */
-async function loadChannelToggles() {
-  const d = await fetch('/api/config').then(r => r.json());
-  const tgEl     = document.getElementById('tgEnabled');
-  const waEl     = document.getElementById('waEnabled');
-  const tgStatus = document.getElementById('tgStatus');
-
-  if (d.telegram) {
-    tgEl.checked = d.telegram.enabled === 'true';
-    const configured = d.telegram.bot_token && !d.telegram.bot_token.startsWith('GANTI');
-    tgStatus.textContent = configured
-      ? `Chat ID: ${d.telegram.chat_id}`
-      : 'Belum dikonfigurasi';
-  }
-  if (d.whatsapp) {
-    waEl.checked = d.whatsapp.enabled === 'true';
+/* ── WHATSAPP GROUP ─────────────────────────────────────── */
+async function loadWaGroup() {
+  const d = await fetch('/api/wa/groups').then(r => r.json()).catch(() => ({ ok: false }));
+  if (d.ok && d.current) {
+    document.getElementById('waCurrentGroup').textContent = d.current.group_name || '—';
+    document.getElementById('waCurrentJid').textContent   = d.current.group_jid  || '—';
+    document.getElementById('waNewName').value = d.current.group_name || '';
+    document.getElementById('waNewJid').value  = d.current.group_jid  || '';
   }
 }
 
-async function saveChannelToggle(channel) {
-  const isWa    = channel === 'whatsapp';
-  const elId    = isWa ? 'waEnabled' : 'tgEnabled';
-  const enabled = document.getElementById(elId).checked;
-  // disable toggle sementara selama save
-  document.getElementById(elId).disabled = true;
-  try {
-    const res = await fetch('/api/toggle', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ channel, enabled }),
-    }).then(r => r.json());
-    if (res.ok) {
-      termLog(`${channel} notifikasi ${enabled ? 'diaktifkan ✓' : 'dinonaktifkan'}.`, enabled ? 'success' : 'warn');
-    } else {
-      termLog(`Gagal menyimpan toggle ${channel}.`, 'error');
-      document.getElementById(elId).checked = !enabled;
-    }
-  } catch (_) {
-    termLog(`Error saat toggle ${channel}.`, 'error');
-    document.getElementById(elId).checked = !enabled;
-  } finally {
-    document.getElementById(elId).disabled = false;
+document.getElementById('btnSetGroup').addEventListener('click', async () => {
+  const jid  = document.getElementById('waNewJid').value.trim();
+  const name = document.getElementById('waNewName').value.trim();
+  if (!jid) { termLog('JID tidak boleh kosong.', 'error'); return; }
+  termSep();
+  termLog('Menyimpan group tujuan...', 'info');
+  const res = await fetch('/api/wa/setgroup', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ group_jid: jid, group_name: name }),
+  }).then(r => r.json());
+  if (res.ok) {
+    termLog(`Group diubah ke: ${name || jid}`, 'success');
+    termLog('Restart wa-gateway agar perubahan berlaku.', 'warn');
+    loadWaGroup();
+  } else {
+    termLog(`Gagal: ${res.error || 'unknown error'}`, 'error');
   }
-}
+});
 
 /* ── CONFIG EDITOR ──────────────────────────────────────── */
 const LABELS = {
@@ -232,8 +218,7 @@ document.getElementById('btnSaveConfig').addEventListener('click', async () => {
   if (res.ok) {
     termLog('Konfigurasi tersimpan.', 'success');
     termLog('Restart service agar perubahan berlaku.', 'warn');
-    loadChannelToggles();
-  } else {
+      } else {
     termLog('Gagal menyimpan konfigurasi.', 'error');
   }
 });
@@ -273,9 +258,8 @@ document.getElementById('btnRestartWa').addEventListener('click', async () => {
 loadActivityLog();
 loadStatus();
 loadConfig();
-loadChannelToggles();
 loadWaStatus();
+loadWaGroup();
 
 setInterval(loadStatus, 10000);
 setInterval(loadWaStatus, 8000);
-// loadChannelToggles tidak di-poll — hanya load sekali saat init dan setelah save
