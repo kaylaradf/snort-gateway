@@ -1,6 +1,8 @@
 [Unit]
 Description=Snort Gateway — WhatsApp Notifier
 After=network.target
+PartOf=snort-gateway.service
+ConditionPathExists=/opt/ids-dashboard/wa-gateway/config.json
 
 [Service]
 Type=simple

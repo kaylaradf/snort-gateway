@@ -166,6 +166,10 @@ dedup_window_seconds   = $DEDUP
 min_priority_notify    = $MIN_PRIO
 poll_interval_seconds  = $POLL
 max_notif_per_category = $MAX_NOTIF
+
+[whatsapp]
+enabled     = false
+gateway_url = http://127.0.0.1:3001/send
 EOF
     chmod 600 "$CONFIG"
     info "config.ini tersimpan (mode 600)"
@@ -180,6 +184,14 @@ cp "$SCRIPT_DIR/parser.py" "$INSTALL_DIR/parser.py"
 info "Menyalin dashboard/"
 rm -rf "$INSTALL_DIR/dashboard"
 cp -r "$SCRIPT_DIR/dashboard" "$INSTALL_DIR/dashboard"
+
+if [[ -d "$SCRIPT_DIR/wa-gateway" ]]; then
+    info "Menyalin wa-gateway/"
+    rm -rf "$INSTALL_DIR/wa-gateway"
+    cp -r "$SCRIPT_DIR/wa-gateway" "$INSTALL_DIR/wa-gateway"
+    info "Menginstall Node.js dependencies wa-gateway"
+    cd "$INSTALL_DIR/wa-gateway" && npm install --omit=dev --silent 2>/dev/null; cd "$SCRIPT_DIR"
+fi
 
 if [[ -f "$SCRIPT_DIR/local.rules" ]]; then
     if [[ -f /etc/snort/rules/local.rules ]]; then
@@ -229,12 +241,15 @@ done
 
 cp "$SCRIPT_DIR/snort-gateway.service"           /etc/systemd/system/snort-gateway.service
 cp "$SCRIPT_DIR/snort-gateway-dashboard.service" /etc/systemd/system/snort-gateway-dashboard.service
+cp "$SCRIPT_DIR/wa-gateway.service"              /etc/systemd/system/wa-gateway.service
 systemctl daemon-reload
 
 systemctl enable snort-gateway
 systemctl enable snort-gateway-dashboard
+systemctl enable wa-gateway
 info "snort-gateway.service enabled"
 info "snort-gateway-dashboard.service enabled"
+info "wa-gateway.service enabled (start setelah node setup.js)"
 
 # ── Selesai ───────────────────────────────────────────────────────────────────
 echo ""

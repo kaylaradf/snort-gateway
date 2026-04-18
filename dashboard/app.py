@@ -456,6 +456,7 @@ def api_status():
 # ─── API: CONFIG ─────────────────────────────────────────────────────────────
 
 SENSITIVE = {"bot_token", "chat_id"}
+WA_GATEWAY_URL = "http://127.0.0.1:3001"
 
 @app.route("/api/config", methods=["GET"])
 def api_config_get():
@@ -520,6 +521,43 @@ def api_restart_parser():
         capture_output=True, text=True
     )
     return jsonify({"ok": result.returncode == 0, "msg": result.stderr.strip() or "OK"})
+
+
+@app.route("/api/restart/wa", methods=["POST"])
+def api_restart_wa():
+    result = subprocess.run(
+        ["sudo", "systemctl", "restart", "wa-gateway"],
+        capture_output=True, text=True
+    )
+    return jsonify({"ok": result.returncode == 0, "msg": result.stderr.strip() or "OK"})
+
+
+@app.route("/api/wa/status")
+def api_wa_status():
+    import urllib.request
+    try:
+        cfg = configparser.ConfigParser()
+        cfg.read(CONFIG_PATH)
+        port = cfg.get("whatsapp", "gateway_url", fallback="http://127.0.0.1:3001/send")
+        base = port.rsplit("/send", 1)[0]
+        with urllib.request.urlopen(f"{base}/status", timeout=2) as r:
+            return jsonify({"ok": True, **__import__('json').loads(r.read())})
+    except Exception:
+        return jsonify({"ok": False, "connected": False, "qr_pending": False, "queue": 0})
+
+
+@app.route("/api/wa/qr")
+def api_wa_qr():
+    import urllib.request
+    try:
+        cfg = configparser.ConfigParser()
+        cfg.read(CONFIG_PATH)
+        port = cfg.get("whatsapp", "gateway_url", fallback="http://127.0.0.1:3001/send")
+        base = port.rsplit("/send", 1)[0]
+        with urllib.request.urlopen(f"{base}/qr", timeout=2) as r:
+            return jsonify(__import__('json').loads(r.read()))
+    except Exception:
+        return jsonify({"qr": None})
 
 
 if __name__ == "__main__":

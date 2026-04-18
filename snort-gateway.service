@@ -1,6 +1,7 @@
 [Unit]
-Description=Snort Gateway — IDS Parser (Snort → SQLite → Telegram)
+Description=Snort Gateway — IDS Parser (Snort → SQLite → Telegram/WhatsApp)
 After=network.target
+Wants=wa-gateway.service
 
 [Service]
 Type=simple
