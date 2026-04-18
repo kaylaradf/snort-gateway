@@ -105,10 +105,10 @@ def parse_addr(addr: str):
 
 
 def parse_timestamp(ts: str) -> str:
-    """Convert MM/DD-HH:MM:SS.usec → YYYY-MM-DD HH:MM:SS WIB."""
-    year = datetime.now(JAKARTA_TZ).year
+    """Convert MM/DD-HH:MM:SS.usec (UTC) → YYYY-MM-DD HH:MM:SS WIB."""
+    year = datetime.now(timezone.utc).year
     dt = datetime.strptime(f"{year}/{ts.split('.')[0]}", "%Y/%m/%d-%H:%M:%S")
-    dt = dt.replace(tzinfo=JAKARTA_TZ)
+    dt = dt.replace(tzinfo=timezone.utc).astimezone(JAKARTA_TZ)
     return dt.strftime("%Y-%m-%d %H:%M:%S WIB")
 
 
