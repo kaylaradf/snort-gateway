@@ -110,18 +110,21 @@ if [[ -n "$NO_NODE" ]]; then
     echo -e "      ${RED}(WhatsApp tidak tersedia — Node.js belum terinstall)${NC}"
 fi
 echo ""
+echo -e "  ${BOLD}[4]${NC} Skip — konfigurasi manual nanti via dashboard"
+echo ""
 
 while true; do
-    read -rp "  Pilihan [1/2/3]: " GW_CHOICE
+    read -rp "  Pilihan [1/2/3/4]: " GW_CHOICE
     case "$GW_CHOICE" in
         1) GATEWAY="telegram"; break ;;
         2)
-            [[ -n "$NO_NODE" ]] && { warn "Node.js tidak tersedia, pilih 1 atau 3"; continue; }
+            [[ -n "$NO_NODE" ]] && { warn "Node.js tidak tersedia, pilih 1, 3, atau 4"; continue; }
             GATEWAY="whatsapp"; break ;;
         3)
-            [[ -n "$NO_NODE" ]] && { warn "Node.js tidak tersedia untuk WhatsApp, pilih 1"; continue; }
+            [[ -n "$NO_NODE" ]] && { warn "Node.js tidak tersedia untuk WhatsApp, pilih 1 atau 4"; continue; }
             GATEWAY="both"; break ;;
-        *) warn "Masukkan 1, 2, atau 3" ;;
+        4) GATEWAY="skip"; break ;;
+        *) warn "Masukkan 1, 2, 3, atau 4" ;;
     esac
 done
 info "Gateway dipilih: $GATEWAY"
@@ -332,7 +335,10 @@ echo -e "${GREEN}${BOLD}━━━━━━━━━━━━━━━━━━�
 echo -e "${GREEN}${BOLD}  Instalasi selesai!${NC}"
 echo -e "${GREEN}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
-echo "  Gateway aktif  : $GATEWAY"
+echo "  Gateway aktif  : ${GATEWAY}"
+[[ "$GATEWAY" == "skip" ]] && echo -e "  ${YELLOW}[!] Gateway belum dikonfigurasi. Edit config.ini dan restart parser:${NC}"
+[[ "$GATEWAY" == "skip" ]] && echo "      sudo nano /opt/ids-dashboard/config.ini"
+[[ "$GATEWAY" == "skip" ]] && echo "      sudo systemctl restart snort-gateway"
 echo "  Dashboard      : http://$(hostname -I | awk '{print $1}'):5000"
 echo ""
 echo "  Service management:"
