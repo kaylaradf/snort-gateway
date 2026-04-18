@@ -89,19 +89,3 @@ async function pollStatus() {
 
 pollStatus();
 setInterval(pollStatus, 30000);
-
-/* ── PAGE TRANSITION ────────────────────────────────────── */
-document.querySelectorAll('[data-nav]').forEach(link => {
-  link.addEventListener('click', e => {
-    const href = link.getAttribute('href');
-    if (!href || href === window.location.pathname) return;
-    e.preventDefault();
-    const content = document.getElementById('pageContent');
-    if (content) {
-      content.classList.add('page-exit');
-      setTimeout(() => { window.location.href = href; }, 120);
-    } else {
-      window.location.href = href;
-    }
-  });
-});

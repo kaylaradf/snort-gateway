@@ -72,10 +72,10 @@ async function loadAll() {
   const r = currentRange;
 
   const [timeline, cats, ips, protos] = await Promise.all([
-    fetch(`/api/analytics/timeline?dummy=1${rangeParams()}`).then(x => x.json()),
-    fetch(`/api/analytics/by_category?dummy=1${rangeParams()}`).then(x => x.json()),
-    fetch(`/api/analytics/top_ips?dummy=1${rangeParams()}`).then(x => x.json()),
-    fetch(`/api/analytics/by_protocol?dummy=1${rangeParams()}`).then(x => x.json()),
+    fetch(`/api/analytics/timeline?range=${r}`).then(x => x.json()),
+    fetch(`/api/analytics/by_category?range=${r}`).then(x => x.json()),
+    fetch(`/api/analytics/top_ips?range=${r}`).then(x => x.json()),
+    fetch(`/api/analytics/by_protocol?range=${r}`).then(x => x.json()),
   ]);
 
   /* timeline */
@@ -115,35 +115,13 @@ async function loadAll() {
     </div>`).join('');
 }
 
-/* range & date */
-let customStart = '', customEnd = '';
-
-function rangeParams() {
-  if (customStart) {
-    const p = new URLSearchParams({ start: customStart });
-    if (customEnd) p.set('end', customEnd);
-    return '&' + p;
-  }
-  return '&range=' + currentRange;
-}
-
+/* range buttons */
 document.getElementById('rangeButtons').addEventListener('click', e => {
   const btn = e.target.closest('[data-r]');
   if (!btn) return;
   currentRange = btn.getAttribute('data-r');
-  customStart = ''; customEnd = '';
-  document.getElementById('dateStart').value = '';
-  document.getElementById('dateEnd').value = '';
   document.querySelectorAll('#rangeButtons .pill-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
-  loadAll();
-});
-
-document.getElementById('btnApplyDate').addEventListener('click', () => {
-  customStart = document.getElementById('dateStart').value;
-  customEnd   = document.getElementById('dateEnd').value;
-  if (!customStart) return;
-  document.querySelectorAll('#rangeButtons .pill-btn').forEach(b => b.classList.remove('active'));
   loadAll();
 });
 

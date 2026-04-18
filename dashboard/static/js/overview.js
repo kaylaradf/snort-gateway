@@ -86,7 +86,7 @@ async function loadOverview() {
 }
 
 async function loadTimeline() {
-  const rows = await fetch(rangeParams('/api/overview/timeline')).then(r => r.json());
+  const rows = await fetch('/api/overview/timeline').then(r => r.json());
   tlChart.data.labels             = rows.map(r => r.t);
   tlChart.data.datasets[0].data   = rows.map(r => r.p1);
   tlChart.data.datasets[1].data   = rows.map(r => r.p2);
@@ -94,7 +94,7 @@ async function loadTimeline() {
 }
 
 async function loadDonut() {
-  const rows = await fetch(rangeParams('/api/overview/by_category')).then(r => r.json());
+  const rows = await fetch('/api/overview/by_category').then(r => r.json());
   const total = rows.reduce((s, r) => s + r.count, 0);
   document.getElementById('donutTotal').textContent = total;
 
@@ -117,7 +117,7 @@ async function loadDonut() {
 }
 
 async function loadTopIPs() {
-  const rows = await fetch(rangeParams('/api/overview/top_ips')).then(r => r.json());
+  const rows = await fetch('/api/overview/top_ips').then(r => r.json());
   const max  = rows[0]?.count || 1;
   document.getElementById('topIPs').innerHTML = rows.map((r, i) => `
     <div class="ip-row">
@@ -131,7 +131,7 @@ async function loadTopIPs() {
 }
 
 async function loadTopRules() {
-  const rows = await fetch(rangeParams('/api/overview/top_rules')).then(r => r.json());
+  const rows = await fetch('/api/overview/top_rules').then(r => r.json());
   const max  = rows[0]?.count || 1;
   document.getElementById('topRules').innerHTML = rows.map(r => `
     <div class="ip-row">
@@ -172,44 +172,6 @@ function onPaletteChange() {
     loadDonut();
   }, 50);
 }
-
-/* ── RANGE & DATE ───────────────────────────────────────── */
-let currentRange = 'today';
-let customStart = '', customEnd = '';
-
-function rangeParams(base) {
-  const url = base || '/api/overview';
-  if (customStart) {
-    const p = new URLSearchParams({ start: customStart });
-    if (customEnd) p.set('end', customEnd);
-    return url + '?' + p;
-  }
-  if (currentRange === 'today') {
-    const today = new Date().toISOString().slice(0, 10);
-    return url + '?start=' + today + '&end=' + today;
-  }
-  return url + '?range=' + currentRange;
-}
-
-document.getElementById('rangeButtons').addEventListener('click', e => {
-  const btn = e.target.closest('[data-r]');
-  if (!btn) return;
-  currentRange = btn.getAttribute('data-r');
-  customStart = ''; customEnd = '';
-  document.getElementById('dateStart').value = '';
-  document.getElementById('dateEnd').value = '';
-  document.querySelectorAll('#rangeButtons .pill-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  refreshAll();
-});
-
-document.getElementById('btnApplyDate').addEventListener('click', () => {
-  customStart = document.getElementById('dateStart').value;
-  customEnd   = document.getElementById('dateEnd').value;
-  if (!customStart) return;
-  document.querySelectorAll('#rangeButtons .pill-btn').forEach(b => b.classList.remove('active'));
-  refreshAll();
-});
 
 /* ── POLLING ────────────────────────────────────────────── */
 let countdown = 10;
