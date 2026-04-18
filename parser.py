@@ -34,6 +34,10 @@ DEDUP_WIN   = int(config["settings"]["dedup_window_seconds"])
 MIN_PRIO    = int(config["settings"]["min_priority_notify"])
 POLL_SEC    = float(config["settings"]["poll_interval_seconds"])
 
+# WhatsApp gateway (opsional)
+WA_ENABLED  = config.getboolean("whatsapp", "enabled", fallback=False)
+WA_URL      = config.get("whatsapp", "gateway_url", fallback="http://127.0.0.1:3001/send")
+
 # ─── LOGGING ─────────────────────────────────────────────────────────────────
 
 logging.basicConfig(
@@ -248,6 +252,43 @@ def send_telegram(alert: dict, alert_id: int) -> bool:
     log.error("Telegram: gagal kirim setelah 3 percobaan untuk SID %s", alert["sid"])
     return False
 
+# ─── WHATSAPP ────────────────────────────────────────────────────────────────
+
+def build_wa_message(alert: dict, alert_id: int) -> str:
+    emoji = {1: "🔴", 2: "🟠"}.get(alert["priority"], "🟡")
+    severity = {1: "CRITICAL", 2: "WARNING"}.get(alert["priority"], "INFO")
+    src_port = f":{alert['src_port']}" if alert["src_port"] else ""
+    dst_port = f":{alert['dst_port']}" if alert["dst_port"] else ""
+    return (
+        f"{emoji} *[{severity}] IDS ALERT #{alert_id}*\n"
+        f"{'─' * 28}\n"
+        f"🎯 {alert['msg']}\n"
+        f"SID      : {alert['sid']} (rev {alert['rev']})\n"
+        f"Category : {alert['category'] or 'Unknown'}\n"
+        f"{'─' * 28}\n"
+        f"From     : {alert['src_ip']}{src_port}\n"
+        f"To       : {alert['dst_ip']}{dst_port}\n"
+        f"Protocol : {alert['protocol']}\n"
+        f"🕐 {alert['timestamp']}"
+    )
+
+
+def send_whatsapp(alert: dict, alert_id: int) -> bool:
+    if not WA_ENABLED:
+        return False
+    try:
+        resp = requests.post(
+            WA_URL,
+            json={"message": build_wa_message(alert, alert_id)},
+            timeout=5,
+        )
+        if resp.status_code == 200:
+            return True
+        log.warning("WhatsApp gateway HTTP %s", resp.status_code)
+    except requests.RequestException as e:
+        log.warning("WhatsApp gateway tidak tersedia: %s", e)
+    return False
+
 # ─── POSITION TRACKING ───────────────────────────────────────────────────────
 
 def read_pos() -> int:
@@ -344,7 +385,9 @@ def main():
 
         record_notif(conn, alert["sid"], alert["src_ip"])
         if send_telegram(alert, alert_id):
-            log.info("Notif terkirim: SID=%s src=%s alert_id=#%s", alert["sid"], alert["src_ip"], alert_id)
+            log.info("Notif Telegram terkirim: SID=%s src=%s alert_id=#%s", alert["sid"], alert["src_ip"], alert_id)
+        if send_whatsapp(alert, alert_id):
+            log.info("Notif WhatsApp terkirim: SID=%s src=%s alert_id=#%s", alert["sid"], alert["src_ip"], alert_id)
 
     f.close()
     conn.close()
