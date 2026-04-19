@@ -165,11 +165,6 @@ gateway_url = http://127.0.0.1:3001/send
 
 | SID | Message | Category |
 |---|---|---|
-| 527 | BAD-TRAFFIC same SRC/DST | Bad Traffic |
-| 621 | SCAN FIN | Reconnaissance |
-| 1228 | SCAN nmap XMAS | Reconnaissance |
-| 1418 | SNMP request tcp | Reconnaissance |
-| 1421 | SNMP AgentX/tcp request | Reconnaissance |
 | 1000099 | ICMP PING Detected | ICMP |
 | 1000001–1000004 | HTTP GET/POST/PUT/DELETE | Web Traffic |
 | 2000001–2000005 | Possible Nmap SYN/FIN/NULL/XMAS/UDP Scan | Reconnaissance |
